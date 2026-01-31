@@ -1,0 +1,79 @@
+# ----------------------------
+# Build outputs
+# ----------------------------
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# ----------------------------
+# Binaries / objects
+# ----------------------------
+*.o
+*.obj
+*.so
+*.a
+*.out
+*.exe
+
+# ----------------------------
+# CUDA / Nsight artifacts
+# ----------------------------
+*.ptx
+*.cubin
+*.fatbin
+*.nvprof
+*.nsys-rep
+*.nsys-rep.tmp
+*.qdrep
+*.qds
+*.ncu-rep
+*.ncu-rep.tmp
+*.sqlite
+
+# ----------------------------
+# Results & logs (keep structure, ignore contents)
+# ----------------------------
+results/raw/*
+results/plots/*
+logs/*
+profiles/nsys/*
+profiles/ncu/*
+
+# Keep directories tracked
+!.gitkeep
+!results/raw/.gitkeep
+!results/plots/.gitkeep
+!profiles/nsys/.gitkeep
+!profiles/ncu/.gitkeep
+!logs/.gitkeep
+
+# ----------------------------
+# Python caches
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.conda/
+.ipynb_checkpoints/
+
+# ----------------------------
+# Editor / OS
+# ----------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ----------------------------
+# Archives
+# ----------------------------
+*.zip
+*.tar.gz
