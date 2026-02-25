@@ -50,3 +50,25 @@ gemm-fp16/
   profiles/
     nsys/                  # Nsight Systems traces
     ncu/                   # Nsight Compute reports
+
+---
+
+## 当前结果（阶段性，FP32）
+
+环境：RTX 4060 + WSL2 Ubuntu + CUDA 12.8  
+实现：naive vs shared-memory tiled（16x16）  
+计时方式：CUDA events（warmup + repeat，取 median）
+
+| impl  | M=N=K | median time (ms) | GFLOP/s |
+|---|---:|---:|---:|
+| naive | 256  | 0.054 | 618.264 |
+| tiled | 256  | 0.046 | 762.047 |
+| naive | 512  | 0.394 | 681.779 |
+| tiled | 512  | 0.297 | 903.945 |
+| naive | 1024 | 3.109 | 690.776 |
+| tiled | 1024 | 2.393 | 897.399 |
+
+### 初步观察
+- 相比 naive，tiled 版本在 256 、512 和 1024 尺寸上均有性能提升。
+- 在更大尺寸下（如 512），shared memory tiling 带来的收益更明显（当前阶段性结果约 `1.4x`）。
+- 下一步将补充 1024+ 尺寸、Nsight Compute 指标分析，并接入 cuBLAS/cuBLASLt baseline。
