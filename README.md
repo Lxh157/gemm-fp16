@@ -10,7 +10,7 @@
 
 ---
 
-## 当前进展（截至 YYYY-MM-DD）
+## 当前进展
 - [x] 搭建基础 benchmark 框架（CUDA events 计时）
 - [x] 实现 naive GEMM kernel（正确性校验）
 - [x] 实现优化版 GEMM kernel（shared memory tiling）
