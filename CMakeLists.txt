@@ -19,6 +19,7 @@ endif()
 add_executable(bench_gemm
   src/main_bench.cu
   src/gemm_naive.cu
+  src/gemm_tiled.cu
 )
 
 target_include_directories(bench_gemm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
