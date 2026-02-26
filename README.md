@@ -17,8 +17,6 @@
 - 初步 NCU 指标分析（瓶颈解释）
     
 
----
-
 ## 当前进展
 
 -  搭建 benchmark 框架：参数化 M/N/K，CUDA events 计时，输出 min/median/avg 与 GFLOP/s
@@ -40,8 +38,6 @@
 -  完整图表与报告式总结（进行中）
     
 
----
-
 ## 环境
 
 - GPU: NVIDIA GeForce RTX 4060 Laptop GPU
@@ -55,7 +51,6 @@
 - Tools: Nsight Compute / Nsight Systems（基础使用）
     
 
----
 
 ## 目录结构
 
@@ -81,8 +76,6 @@ gemm-fp16/
   logs/
 ```
 
-
----
 
 ## 复现方式（Build / Run）
 
@@ -127,7 +120,6 @@ bash scripts/run_bench.sh
 BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 ```
 
----
 
 ## 实验口径说明
 
@@ -149,8 +141,6 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 - 建议口径：`--no-check --warmup 0 --repeat 1`（或只看 repeat 对应的那次 kernel launch）
     
 
----
-
 ## 当前结果（阶段性，FP32）
 
 ### Benchmark results（CUDA events，warmup=3，repeat=10，取 median；全部 correctness PASS）
@@ -160,6 +150,9 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 |naive|618.264|689.853|693.388|
 |tiled|762.047|868.026|897.765|
 |tiled_rb1x4|1212.928|1833.175|1843.701|
+| cublas (sgemm) | 2337.962 | 4854.519 | 6307.224 |
+
+> cuBLAS baseline：使用 `cublasSgemm`，并通过 row-major→column-major 的等价映射实现 `C = A × B`（row-major 语义），math mode = `CUBLAS_DEFAULT_MATH`。
 
 ### Speedup summary
 
@@ -169,15 +162,20 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 |512³|1.26x|2.11x|2.66x|
 |1024³|1.29x|2.05x|2.66x|
 
+### Relative to cuBLAS (rb1x4 / cublas)
+
+| Size | rb1x4 / cublas |
+|---|---:|
+| 256³ | 51.9% |
+| 512³ | 37.8% |
+| 1024³ | 29.2% |
+
 ### 初步观察
 
-- `tiled` 相比 `naive` 稳定提升约 **1.23x~1.29x**，说明 shared memory tiling 已能减少部分冗余访存并提升吞吐。
+- `tiled` 相比 `naive` 稳定提升约 1.23x~1.29x，说明 shared memory tiling 已能减少部分冗余访存并提升吞吐。
+- 最大收益来自 `tiled_rb1x4`：在 512³/1024³ 上相对 `tiled` 稳定在 ~2x（bench 结果），说明 thread coarsening / register blocking 能显著摊薄 per-output 的 shared load / sync / address calc 等开销。
+- 与 `cublasSgemm` 相比，当前 `tiled_rb1x4` 在 1024³ 上达到约 29.2% 的吞吐，仍有较大优化空间（例如更深的寄存器分块、向量化 load、提高数据复用、减少指令与同步开销、以及进一步靠近 tensor-core 路径等）。
     
-- 最大的收益来自 `tiled_rb1x4`：在 512³/1024³ 上相对 `tiled` 稳定在 **~2x**，相对 `naive` 达到 **~2.66x**。  
-    这表明仅做 tiling 仍存在较高的 per-thread/per-output overhead，而 coarsening/register blocking 能显著摊薄这些开销。
-    
-
----
 
 ## Nsight Compute 初步瓶颈解释（tiled vs tiled_rb1x4，1024³，profiling-only）
 
@@ -204,7 +202,6 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 
 这说明 `tiled` 版本主要受 **MIO 指令队列压力（包含 shared memory 相关指令）** 与 **barrier/sync 开销**影响，warp 在“发不出下一条指令”的状态上花费较多周期。`tiled_rb1x4` 通过 thread coarsening / register blocking（每线程计算 1x4 输出）提高了每次加载/同步所能覆盖的有效计算量，从而摊薄 shared-memory 指令与同步的固定成本，降低 MIO throttle 与 barrier stall，最终在 bench 稳态测试中带来约 2× 的吞吐提升（1024³：~1844 vs ~898 GFLOP/s）。
 
----
 
 ## 下一步计划（短期）
 
