@@ -18,6 +18,10 @@ void launch_gemm_tiled(const float* dA, const float* dB, float* dC,
 void launch_gemm_tiled_rb1x4(const float* dA, const float* dB, float* dC,
                              int M, int N, int K,
                              cudaStream_t stream);
+// 来自 gemm_tiled_rb2x4.cu 的声明             
+void launch_gemm_tiled_rb2x4(const float* dA, const float* dB, float* dC,
+                             int M, int N, int K,
+                             cudaStream_t stream);
 // 来自 gemm_cublas.cu 的声明             
 void launch_gemm_cublas_rowmajor(const float* A, const float* B, float* C,
                           int M, int N, int K, cudaStream_t stream);
@@ -83,9 +87,9 @@ Args parse_args(int argc, char** argv) {
     } else if (s == "--impl") {
         need_value(i);
         a.impl = argv[++i];
-        if (a.impl != "naive" && a.impl != "tiled" && a.impl != "tiled_rb1x4" && a.impl != "cublas") {
+        if (a.impl != "naive" && a.impl != "tiled" && a.impl != "tiled_rb1x4" && a.impl != "tiled_rb2x4" && a.impl != "cublas") {
           std::cerr << "Invalid --impl: " << a.impl
-                    << " (expected naive, tiled, tiled_rb1x4, or cublas)" << std::endl;
+                    << " (expected naive, tiled, tiled_rb1x4, tiled_rb2x4, or cublas)" << std::endl;
           std::exit(EXIT_FAILURE);
         }
     } else {
@@ -149,6 +153,8 @@ int main(int argc, char** argv) {
       launch_gemm_tiled(dA, dB, dC, M, N, K, stream);
     } else if (args.impl == "tiled_rb1x4") {
       launch_gemm_tiled_rb1x4(dA, dB, dC, M, N, K, stream);
+    } else if (args.impl == "tiled_rb2x4") {
+      launch_gemm_tiled_rb2x4(dA, dB, dC, M, N, K, stream);
     } else if (args.impl == "cublas") {
       launch_gemm_cublas_rowmajor(dA, dB, dC, M, N, K, stream);
     } else {

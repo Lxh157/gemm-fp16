@@ -18,6 +18,7 @@ add_executable(bench_gemm
   src/gemm_naive.cu
   src/gemm_tiled.cu
   src/gemm_tiled_rb1x4.cu
+  src/gemm_tiled_rb2x4.cu
   src/gemm_cublas.cu
 )
 
