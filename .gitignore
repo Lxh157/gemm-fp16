@@ -37,7 +37,7 @@ compile_commands.json
 # Results & logs (keep structure, ignore contents)
 # ----------------------------
 results/raw/*
-results/plots/*
+# results/plots/*
 logs/*
 profiles/nsys/*
 profiles/ncu/*

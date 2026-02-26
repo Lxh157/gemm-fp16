@@ -25,17 +25,19 @@
     
 -  tiled GEMM kernel（shared memory tiling）
     
--  tiled_rb1x4 GEMM kernel（thread coarsening / register blocking）
+-  tiled_rb1x4 GEMM kernel（thread coarsening）
+
+-  接入 cuBLAS 以做参照（已完成）
+
+-  tiled_rb2x4 GEMM kernel（thread coarsening）
     
 -  统一口径 batch benchmark & 性能对比表（见下文）
     
--  Nsight Compute 初步对比（tiled vs tiled_rb1x4，见下文）
+-  Nsight Compute 对比（tiled vs tiled_rb1x4 vs tiled_rb2x4，见下文）
     
--  接入 cuBLAS / cuBLASLt baseline（进行中）
+-  更系统的 NCU 指标/访存事务/指令级分析（见下文）
     
--  更系统的 NCU 指标/访存事务/指令级分析（进行中）
-    
--  完整图表与报告式总结（进行中）
+-  完整图表与报告式总结（见下文）
     
 
 ## 环境
@@ -171,6 +173,14 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 | 256³  |         67.63% |         **77.46%** |
 | 512³  |         39.74% |         **61.11%** |
 | 1024³ |         30.05% |         **52.90%** |
+
+### 可视化（results/plots）
+
+![FP32 GEMM throughput](results/plots/gflops_fp32.png)
+
+![Relative to cuBLAS](results/plots/rel_to_cublas_fp32.png)
+
+> 图表由 `scripts/plot.py` 从 `results/raw/bench_fp32_20260226_152021.txt` 自动解析生成。
     
 ### Nsight Compute 初步瓶颈解释（tiled vs tiled_rb1x4，1024³，profiling-only）
 
@@ -178,12 +188,12 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 
 | 指标 | tiled | rb1x4 | rb2x4 | 结论/变化解释 |
 | :--- | :--- | :--- | :--- | :--- |
-| Achieved Occupancy (%) | 98.55 | 79.92 | 63.15 | **tiled -> rb1x4**：降低 occupancy（符合寄存器/每线程工作量上升的预期）<br>**rb1x4 -> rb2x4**：每线程计算更多输出/寄存器压力更大，occupancy 下降（预期 trade-off） |
-| **Warp Cycles per Issued Instruction (cycle)** | **38.13** | **26.49** | **15.12** | **tiled -> rb1x4**：issue 间隔更短（更少“发不出指令”的空转）<br>**rb1x4 -> rb2x4**：**下降约 43%**：warp 发指令更“紧凑”，空转更少 |
-| **Stall MIO Throttle (cycles/inst)** | **20.02** | **12.98** | **4.66** | **tiled -> rb1x4**：显著降低 MIO 队列压力/相关 stall<br>**rb1x4 -> rb2x4**：**显著下降约 64%**：MIO 队列压力减轻，shared/load 等指令相关瓶颈被摊薄 |
-| **Stall Barrier (cycles/inst)** | **5.97** | **3.98** | **1.81** | **tiled -> rb1x4**：显著降低 barrier/sync 相关 stall<br>**rb1x4 -> rb2x4**：**下降约 54%**：同步/屏障开销被摊薄（每次加载/同步覆盖更多计算） |
-| Compute (SM) Throughput (SOL, %) | 96.67 | 53.63 | 65.88 | **tiled -> rb1x4**：SOL% 跨 kernel 不宜直接当“更快/更慢”证据；主要用来辅助判断资源侧重<br>**rb1x4 -> rb2x4**：计算侧利用率提高（与更高 GFLOP/s 一致） |
-| Memory Throughput (SOL, %) | 96.67 | 74.91 | 86.86 | **tiled -> rb1x4**：两者都偏高；tiled 更接近 memory-side SOL 上限<br>**rb1x4 -> rb2x4**：rb2x4 更能持续推进内存侧吞吐（更少被 stall 卡住） |
+| Achieved Occupancy (%) | 98.55 | 79.92 | 63.15 | **tiled -> rb1x4 -> rb2x4**：每线程计算更多输出/寄存器压力更大，occupancy 下降 |
+| **Warp Cycles per Issued Instruction (cycle)** | **38.13** | **26.49** | **15.12** |**rb1x4 -> rb2x4**：**下降约 43%**：warp 发指令更“紧凑”，空转更少 |
+| **Stall MIO Throttle (cycles/inst)** | **20.02** | **12.98** | **4.66** |**rb1x4 -> rb2x4**：**显著下降约 64%**：MIO 队列压力减轻，shared/load 等指令相关瓶颈被摊薄 |
+| **Stall Barrier (cycles/inst)** | **5.97** | **3.98** | **1.81** |**rb1x4 -> rb2x4**：**下降约 54%**：同步/屏障开销被摊薄（每次加载/同步覆盖更多计算） |
+| Compute (SM) Throughput (SOL, %) | 96.67 | 53.63 | 65.88 |**rb1x4 -> rb2x4**：计算侧利用率提高（与更高 GFLOP/s 一致） |
+| Memory Throughput (SOL, %) | 96.67 | 74.91 | 86.86 |**rb1x4 -> rb2x4**：rb2x4 更能持续推进内存侧吞吐（更少被 stall 卡住） |
 
 ### Nsight Compute：rb1x4 → rb2x4 的瓶颈解释（1024³，profiling-only）
 将每线程输出从 1×4 扩展到 2×4（rb2x4）后，Achieved Occupancy 从 **79.92%** 降至 **63.15%**，这是 coarsening/register blocking 增加寄存器与线程资源占用导致的预期 trade-off。但更关键的是，warp-level stall 显著下降：
@@ -211,11 +221,9 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 
 
 ## 下一步计划（短期）
-
-1. 接入 `cublasSgemm` / cuBLASLt baseline（FP32）作为对照（同口径 benchmark）
     
-2. 更系统化的 NCU 分析：补充指令/内存事务（global/shared）与 roofline 视角的解释
+1. 更系统化的 NCU 分析：补充指令/内存事务（global/shared）与 roofline 视角的解释
     
-3. 视时间进行 block shape sweep（如 16×16、32×8、64×8 等）验证性能敏感性
+2. 视时间进行 block shape sweep（如 16×16、32×8、64×8 等）验证性能敏感性
     
-4. 主线收束后再扩展 FP16 / Tensor Core 版本（作为进阶）
+3. 主线收束后再扩展 FP16 / Tensor Core 版本（作为进阶）
