@@ -14,7 +14,10 @@ void launch_gemm_naive(const float* dA, const float* dB, float* dC,
 void launch_gemm_tiled(const float* dA, const float* dB, float* dC,
                        int M, int N, int K,
                        cudaStream_t stream);
-
+// 来自 gemm_tiled_rb1x4.cu 的声明             
+void launch_gemm_tiled_rb1x4(const float* dA, const float* dB, float* dC,
+                             int M, int N, int K,
+                             cudaStream_t stream);
 // 非严格参数解析（Day 1 够用）
 // 支持：
 //   ./bench_gemm
@@ -77,9 +80,9 @@ Args parse_args(int argc, char** argv) {
     } else if (s == "--impl") {
         need_value(i);
         a.impl = argv[++i];
-        if (a.impl != "naive" && a.impl != "tiled") {
+        if (a.impl != "naive" && a.impl != "tiled" && a.impl != "tiled_rb1x4") {
           std::cerr << "Invalid --impl: " << a.impl
-                    << " (expected naive or tiled)" << std::endl;
+                    << " (expected naive, tiled, or tiled_rb1x4)" << std::endl;
           std::exit(EXIT_FAILURE);
         }
     } else {
@@ -134,12 +137,15 @@ int main(int argc, char** argv) {
   CHECK_CUDA(cudaMemcpy(dA, hA.data(), bytesA, cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemcpy(dB, hB.data(), bytesB, cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemset(dC, 0, bytesC));
+
     // launcher 分发函数
   auto launch_selected = [&](cudaStream_t stream = nullptr) {
     if (args.impl == "naive") {
       launch_gemm_naive(dA, dB, dC, M, N, K, stream);
     } else if (args.impl == "tiled") {
       launch_gemm_tiled(dA, dB, dC, M, N, K, stream);
+    } else if (args.impl == "tiled_rb1x4") {
+      launch_gemm_tiled_rb1x4(dA, dB, dC, M, N, K, stream);
     } else {
       std::cerr << "Unknown impl: " << args.impl << std::endl;
       std::exit(EXIT_FAILURE);
