@@ -10,7 +10,7 @@
     
 - shared memory tiling 优化
     
-- thread coarsening / register blocking（每线程计算 1x4 输出）
+- thread coarsening / register blocking（每线程计算 1x4 / 2x4 输出）
     
 - 统一口径 benchmark（稳态性能对比）
     
@@ -27,15 +27,13 @@
     
 -  tiled_rb1x4 GEMM kernel（thread coarsening）
 
--  接入 cuBLAS 以做参照（已完成）
+-  接入 cublasSgemm 做参照（已完成）
 
 -  tiled_rb2x4 GEMM kernel（thread coarsening）
     
 -  统一口径 batch benchmark & 性能对比表（见下文）
     
 -  Nsight Compute 对比（tiled vs tiled_rb1x4 vs tiled_rb2x4，见下文）
-    
--  更系统的 NCU 指标/访存事务/指令级分析（见下文）
     
 -  完整图表与报告式总结（见下文）
     
@@ -63,12 +61,13 @@ gemm-fp16/
     gemm_naive.cu            # naive GEMM
     gemm_tiled.cu            # tiled GEMM（shared memory）
     gemm_tiled_rb1x4.cu      # tiled + register blocking（每线程 1x4 输出）
-    cublaslt_baseline.cu     # cuBLASLt baseline（进行中）
+    gemm_tiled_rb2x4.cu      # tiled + register blocking（每线程 2x4 输出）
+    gemm_cublas.cu           # cublasSgemm baseline
     utils.cuh                # 工具函数 / 校验 / 计时辅助
   scripts/
-    run_bench.sh             # 批量跑 benchmark（统一口径）
+    run_bench.sh             # 批量跑 benchmark
     collect_env.sh           # 导出环境信息
-    plot.py                  # 画图脚本（可选）
+    plot.py                  # 画图脚本
   results/
     raw/                     # 原始结果（日志/CSV）
     plots/                   # 图表
@@ -158,6 +157,13 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 
 > cuBLAS baseline：使用 `cublasSgemm`，并通过 row-major→column-major 的等价映射实现 `C = A × B`（row-major 语义），math mode = `CUBLAS_DEFAULT_MATH`。
 
+### Relative to cuBLAS (rb1x4 / rb2x4 与 cublas 的GFLOPS比值)
+
+| Size  | rb1x4 / cublas | **rb2x4 / cublas** |
+| ----- | -------------: | -----------------: |
+| 256³  |         67.63% |         **77.46%** |
+| 512³  |         39.74% |         **61.11%** |
+| 1024³ |         30.05% |         **52.90%** |
 ### Speedup summary
 
 | Size  | tiled / naive | rb1x4 / tiled | **rb2x4 / rb1x4** |
@@ -166,13 +172,6 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 | 512³  |         1.33× |         2.05× |         **1.54×** |
 | 1024³ |         1.41× |         2.22× |         **1.76×** |
 
-### Relative to cuBLAS (rb1x4 / cublas)
-
-| Size  | rb1x4 / cublas | **rb2x4 / cublas** |
-| ----- | -------------: | -----------------: |
-| 256³  |         67.63% |         **77.46%** |
-| 512³  |         39.74% |         **61.11%** |
-| 1024³ |         30.05% |         **52.90%** |
 
 ### 可视化（results/plots）
 
@@ -180,7 +179,7 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 
 ![Relative to cuBLAS](results/plots/rel_to_cublas_fp32.png)
 
-> 图表由 `scripts/plot.py` 从 `results/raw/bench_fp32_20260226_152021.txt` 自动解析生成。
+> 图表由 `scripts/plot.py` 从 `results/raw/bench_fp32_20260226_152021.txt` 解析生成。
     
 ### Nsight Compute 初步瓶颈解释（tiled vs tiled_rb1x4，1024³，profiling-only）
 
@@ -189,7 +188,7 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
 | 指标 | tiled | rb1x4 | rb2x4 | 结论/变化解释 |
 | :--- | :--- | :--- | :--- | :--- |
 | Achieved Occupancy (%) | 98.55 | 79.92 | 63.15 | **tiled -> rb1x4 -> rb2x4**：每线程计算更多输出/寄存器压力更大，occupancy 下降 |
-| **Warp Cycles per Issued Instruction (cycle)** | **38.13** | **26.49** | **15.12** |**rb1x4 -> rb2x4**：**下降约 43%**：warp 发指令更“紧凑”，空转更少 |
+| **Warp Cycles per Issued Instruction (cycle)** | **38.13** | **26.49** | **15.12** |**rb1x4 -> rb2x4**：**下降约 43%**：warp 发指令更紧凑，空转更少 |
 | **Stall MIO Throttle (cycles/inst)** | **20.02** | **12.98** | **4.66** |**rb1x4 -> rb2x4**：**显著下降约 64%**：MIO 队列压力减轻，shared/load 等指令相关瓶颈被摊薄 |
 | **Stall Barrier (cycles/inst)** | **5.97** | **3.98** | **1.81** |**rb1x4 -> rb2x4**：**下降约 54%**：同步/屏障开销被摊薄（每次加载/同步覆盖更多计算） |
 | Compute (SM) Throughput (SOL, %) | 96.67 | 53.63 | 65.88 |**rb1x4 -> rb2x4**：计算侧利用率提高（与更高 GFLOP/s 一致） |
@@ -217,7 +216,7 @@ BUILD_DIR=build WARMUP=5 REPEAT=20 bash scripts/run_bench.sh
     
 - **rb1x4 → rb2x4**：进一步沿 M 方向 coarsening（每线程 2×4 输出），在 1024³ 上达到 **3353 GFLOP/s（1.76× over rb1x4）**，并将相对 cuBLAS 的比例从 **30.05%** 提升到 **52.90%**。
     
-- 下一步若继续逼近 cuBLAS：优先考虑向量化 global load（例如 `float4`）、shared memory layout/padding 降低 bank conflict、以及更深的寄存器分块（需结合 occupancy 与 stall 再做权衡）。
+- 下一步若继续逼近 cuBLAS：优先考虑向量化 global load（例如 `float4`）、shared memory layout/padding 降低 bank conflict、以及更深的寄存器分块（结合 occupancy 与 stall 再做权衡）。
 
 
 ## 下一步计划（短期）
