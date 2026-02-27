@@ -1,4 +1,4 @@
-# CUDA GEMM Optimization Practice（FP32 主线，后续扩展 FP16）
+# CUDA GEMM Optimization Practice（FP32 主线）
 
 ## 项目目标
 
