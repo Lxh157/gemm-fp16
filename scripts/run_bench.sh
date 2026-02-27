@@ -16,7 +16,7 @@ REPEAT="${REPEAT:-10}"
 
 # 先做最小闭环：9个点
 SIZES=(256 512 1024)
-IMPLS=(naive tiled tiled_rb1x4 tiled_rb2x4 cublas)
+IMPLS=(naive tiled tiled_rb1x4 tiled_rb2x4 cublas cublaslt)
 
 mkdir -p "${OUT_DIR}" "${LOG_DIR}"
 

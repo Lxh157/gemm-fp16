@@ -40,7 +40,7 @@ with open(INPUT, "r", encoding="utf-8", errors="ignore") as f:
             cur_size = None
 
 # 需要的 impl 顺序（按你 README 展示）
-order = ["naive", "tiled", "tiled_rb1x4", "tiled_rb2x4", "cublas"]
+order = ["naive", "tiled", "tiled_rb1x4", "tiled_rb2x4", "cublas", "cublaslt"]
 
 # sizes 取交集并排序
 all_sizes = set()
@@ -66,28 +66,28 @@ plt.savefig(out1, dpi=200, bbox_inches="tight")
 plt.close()
 
 # --- 图2：Relative to cuBLAS ---
-if "cublas" in data:
+if "cublaslt" in data:
     plt.figure()
-    cublas = data["cublas"]
+    cublaslt = data["cublaslt"]
     for impl in ["tiled_rb1x4", "tiled_rb2x4"]:
         if impl not in data:
             continue
         ys = []
         for s in sizes:
-            if s in data[impl] and s in cublas and cublas[s] != 0:
-                ys.append(100.0 * data[impl][s] / cublas[s])
+            if s in data[impl] and s in cublaslt and cublaslt[s] != 0:
+                ys.append(100.0 * data[impl][s] / cublaslt[s])
             else:
                 ys.append(float("nan"))
-        plt.plot(sizes, ys, marker="o", label=f"{impl}/cublas")
+        plt.plot(sizes, ys, marker="o", label=f"{impl}/cublaslt")
     plt.xlabel("Matrix size (M=N=K)")
-    plt.ylabel("Percent of cuBLAS (%)")
-    plt.title("Relative Throughput vs cuBLAS (FP32)")
+    plt.ylabel("Percent of cuBLASLT (%)")
+    plt.title("Relative Throughput vs cuBLASLT (FP32)")
     plt.legend()
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
-    out2 = OUT_DIR / "rel_to_cublas_fp32.png"
+    out2 = OUT_DIR / "rel_to_cublaslt_fp32.png"
     plt.savefig(out2, dpi=200, bbox_inches="tight")
     plt.close()
 
 print(f"[OK] Parsed: {INPUT}")
 print(f"[OK] Wrote: {out1}")
-print(f"[OK] Wrote: {OUT_DIR / 'rel_to_cublas_fp32.png'}")
+print(f"[OK] Wrote: {OUT_DIR / 'rel_to_cublaslt_fp32.png'}")

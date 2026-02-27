@@ -25,6 +25,9 @@ void launch_gemm_tiled_rb2x4(const float* dA, const float* dB, float* dC,
 // 来自 gemm_cublas.cu 的声明             
 void launch_gemm_cublas_rowmajor(const float* A, const float* B, float* C,
                           int M, int N, int K, cudaStream_t stream);
+// 来自 cublaslt_baseline.cu 的声明
+void launch_gemm_cublaslt_rowmajor(const float* A, const float* B, float* C,
+                          int M, int N, int K, cudaStream_t stream);  
 // 非严格参数解析（Day 1 够用）
 // 支持：
 //   ./bench_gemm
@@ -87,9 +90,9 @@ Args parse_args(int argc, char** argv) {
     } else if (s == "--impl") {
         need_value(i);
         a.impl = argv[++i];
-        if (a.impl != "naive" && a.impl != "tiled" && a.impl != "tiled_rb1x4" && a.impl != "tiled_rb2x4" && a.impl != "cublas") {
+        if (a.impl != "naive" && a.impl != "tiled" && a.impl != "tiled_rb1x4" && a.impl != "tiled_rb2x4" && a.impl != "cublas" && a.impl != "cublaslt") {
           std::cerr << "Invalid --impl: " << a.impl
-                    << " (expected naive, tiled, tiled_rb1x4, tiled_rb2x4, or cublas)" << std::endl;
+                    << " (expected naive, tiled, tiled_rb1x4, tiled_rb2x4, cublas, or cublaslt)" << std::endl;
           std::exit(EXIT_FAILURE);
         }
     } else {
@@ -144,9 +147,11 @@ int main(int argc, char** argv) {
   CHECK_CUDA(cudaMemcpy(dA, hA.data(), bytesA, cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemcpy(dB, hB.data(), bytesB, cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemset(dC, 0, bytesC));
+  cudaStream_t stream;
+  CHECK_CUDA(cudaStreamCreate(&stream));
 
     // launcher 分发函数
-  auto launch_selected = [&](cudaStream_t stream = nullptr) {
+  auto launch_selected = [&](cudaStream_t stream) {
     if (args.impl == "naive") {
       launch_gemm_naive(dA, dB, dC, M, N, K, stream);
     } else if (args.impl == "tiled") {
@@ -157,6 +162,8 @@ int main(int argc, char** argv) {
       launch_gemm_tiled_rb2x4(dA, dB, dC, M, N, K, stream);
     } else if (args.impl == "cublas") {
       launch_gemm_cublas_rowmajor(dA, dB, dC, M, N, K, stream);
+    } else if (args.impl == "cublaslt") {
+      launch_gemm_cublaslt_rowmajor(dA, dB, dC, M, N, K, stream);
     } else {
       std::cerr << "Unknown impl: " << args.impl << std::endl;
       std::exit(EXIT_FAILURE);
@@ -165,7 +172,7 @@ int main(int argc, char** argv) {
 
   // Correctness check (single run)
   if (args.check) {
-    launch_selected(nullptr);
+    launch_selected(stream);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -190,7 +197,7 @@ int main(int argc, char** argv) {
 
   // Warmup
   for (int i = 0; i < args.warmup; ++i) {
-    launch_selected(nullptr);
+    launch_selected(stream);
   }
   CHECK_CUDA(cudaGetLastError());
   CHECK_CUDA(cudaDeviceSynchronize());
@@ -204,9 +211,9 @@ int main(int argc, char** argv) {
   times_ms.reserve(args.repeat);
 
   for (int i = 0; i < args.repeat; ++i) {
-    CHECK_CUDA(cudaEventRecord(start));
-    launch_selected(nullptr);
-    CHECK_CUDA(cudaEventRecord(stop));
+    CHECK_CUDA(cudaEventRecord(start, stream));
+    launch_selected(stream);
+    CHECK_CUDA(cudaEventRecord(stop, stream));
     CHECK_CUDA(cudaEventSynchronize(stop));
 
     float ms = 0.0f;
@@ -228,6 +235,7 @@ int main(int argc, char** argv) {
   CHECK_CUDA(cudaFree(dA));
   CHECK_CUDA(cudaFree(dB));
   CHECK_CUDA(cudaFree(dC));
+  CHECK_CUDA(cudaStreamDestroy(stream));
 
   return 0;
 }

@@ -20,6 +20,7 @@ add_executable(bench_gemm
   src/gemm_tiled_rb1x4.cu
   src/gemm_tiled_rb2x4.cu
   src/gemm_cublas.cu
+  src/cublaslt_baseline.cu
 )
 
 
@@ -34,4 +35,4 @@ target_compile_options(bench_gemm PRIVATE
 # CUDA Toolkit（提供 CUDA::cudart / CUDA::cublas 等目标）
 find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(bench_gemm PRIVATE CUDA::cudart CUDA::cublas)
+target_link_libraries(bench_gemm PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
