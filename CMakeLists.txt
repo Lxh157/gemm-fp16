@@ -51,8 +51,12 @@ add_executable(bench_gemm
   src/gemm_wmma_fp16acc_staged_cpasync_k64.cu
   src/gemm_wmma_fp16acc_staged_cpasync_k64_skew16.cu
   src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_skew16.cu
+  src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_128B_skew16.cu
+  src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_skew16.cu
   src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch.cu
   src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch2.cu
+
+  src/gemm_mma_fp16acc.cu
 
   src/gemm_cublas_gemmex_fp16acc.cu
   src/cublaslt_fp16acc.cu

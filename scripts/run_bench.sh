@@ -84,11 +84,15 @@ case "${PROFILE_SET}" in
       # wmma_fp16acc_staged_cpasync_k64
       wmma_fp16acc_staged_cpasync_k64_skew16
       wmma_fp16acc_staged_cpasync_k64_4x4_skew16
+      # wmma_fp16acc_staged_cpasync_k64_4x4_128B_skew16
       # wmma_fp16acc_staged_cpasync_k64_4x4_skew16_swizzle_n4
-      wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch
-      wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch2
+      # wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch
+      # wmma_fp16acc_staged_cpasync_k64_4x4_skew16_prefetch2
       # wmma_fp16acc_staged_cpasync_k64_4x8_skew16
       # wmma_fp16acc_staged_cpasync_k64_4x4_skewA16_B32
+
+      mma_fp16acc
+
       # cublas_gemmex_fp16acc
       cublaslt_fp16acc
     )
