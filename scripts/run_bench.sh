@@ -8,7 +8,7 @@ set -euo pipefail
 #   BUILD_DIR=build WARMUP=3 REPEAT=10 bash scripts/run_bench.sh
 #   SIZES_OVERRIDE="1024 2048 4096" PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 #   CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
-#   CUDA_VISIBLE_DEVICES=0 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
+#   CUDA_VISIBLE_DEVICES=1 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 
 BUILD_DIR="${BUILD_DIR:-build}"
 BIN="${BUILD_DIR}/bench_gemm"
@@ -93,6 +93,7 @@ case "${PROFILE_SET}" in
 
       mma_fp16acc
       mma_fp16acc_m16n32
+      mma_fp16acc_m16n32_k32
 
       # cublas_gemmex_fp16acc
       cublaslt_fp16acc

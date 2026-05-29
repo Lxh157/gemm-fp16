@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # 一次性跑 run_bench.sh + raw_to_csv.py。
+# bash scripts/run_all_scripts.sh
 # 自动选择一张空闲 RTX 4090。判定口径：
 #   1) GPU 名称包含 4090
 #   2) 没有 compute process
