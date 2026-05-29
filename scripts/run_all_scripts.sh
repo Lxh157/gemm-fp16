@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 一次性跑 run_bench.sh + raw_to_csv.py。
+# 自动选择一张空闲 RTX 4090。判定口径：
+#   1) GPU 名称包含 4090
+#   2) 没有 compute process
+#   3) memory.used <= EMPTY_MEM_MB，默认 1024 MiB
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
+EMPTY_MEM_MB="${EMPTY_MEM_MB:-1024}"
+
+echo "=== nvidia-smi ==="
+nvidia-smi
+echo
+
+mapfile -t GPU_LINES < <(
+  nvidia-smi --query-gpu=index,name,memory.used,pci.bus_id \
+    --format=csv,noheader,nounits
+)
+
+mapfile -t BUSY_BUSES < <(
+  nvidia-smi --query-compute-apps=gpu_bus_id \
+    --format=csv,noheader,nounits 2>/dev/null \
+    | sed '/^[[:space:]]*$/d' \
+    | sort -u || true
+)
+
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "${s}"
+}
+
+bus_is_busy() {
+  local bus="$1"
+  local busy_bus
+  for busy_bus in "${BUSY_BUSES[@]}"; do
+    if [[ "$(trim "${busy_bus}")" == "${bus}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+SELECTED_GPU=""
+
+echo "=== GPU availability check ==="
+for line in "${GPU_LINES[@]}"; do
+  IFS=',' read -r gpu_idx gpu_name mem_used bus_id <<< "${line}"
+  gpu_idx="$(trim "${gpu_idx}")"
+  gpu_name="$(trim "${gpu_name}")"
+  mem_used="$(trim "${mem_used}")"
+  bus_id="$(trim "${bus_id}")"
+
+  if [[ "${gpu_name}" != *"4090"* ]]; then
+    echo "[skip] gpu=${gpu_idx}, name=${gpu_name}, reason=not RTX 4090"
+    continue
+  fi
+
+  if bus_is_busy "${bus_id}"; then
+    echo "[busy] gpu=${gpu_idx}, name=${gpu_name}, memory.used=${mem_used} MiB, reason=compute process"
+    continue
+  fi
+
+  if (( mem_used > EMPTY_MEM_MB )); then
+    echo "[busy] gpu=${gpu_idx}, name=${gpu_name}, memory.used=${mem_used} MiB, reason=memory>${EMPTY_MEM_MB}MiB"
+    continue
+  fi
+
+  echo "[free] gpu=${gpu_idx}, name=${gpu_name}, memory.used=${mem_used} MiB"
+  SELECTED_GPU="${gpu_idx}"
+  break
+done
+
+if [[ -z "${SELECTED_GPU}" ]]; then
+  echo "[ERROR] all RTX 4090 GPUs are occupied; benchmark cannot run now."
+  exit 1
+fi
+
+echo
+echo "=== run benchmark on physical GPU ${SELECTED_GPU} ==="
+CUDA_VISIBLE_DEVICES="${SELECTED_GPU}" \
+CHECK_MAX_SIZE=256 \
+PROFILE_SET=phase2_4090_tc \
+bash scripts/run_bench.sh
+
+echo
+echo "=== extract latest raw result to csv ==="
+python3 scripts/raw_to_csv.py
+

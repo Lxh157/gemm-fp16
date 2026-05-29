@@ -84,6 +84,7 @@ PHASE2_4090_IMPLS = [
     # "wmma_fp16acc_staged_cpasync_k64_4x8_skew16",
 
     "mma_fp16acc",
+    "mma_fp16acc_m16n32",
     # "cublas_gemmex_fp16acc",
     "cublaslt_fp16acc",
 ]
