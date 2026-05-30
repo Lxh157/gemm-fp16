@@ -37,6 +37,7 @@ compile_commands.json
 # Results & logs (keep structure, ignore contents)
 # ----------------------------
 results/raw/*
+results/table/*
 # results/plots/*
 logs/*
 profiles/nsys/*
@@ -45,6 +46,7 @@ profiles/ncu/*
 # Keep directories tracked
 !.gitkeep
 !results/raw/.gitkeep
+!results/table/.gitkeep
 !results/plots/.gitkeep
 !profiles/nsys/.gitkeep
 !profiles/ncu/.gitkeep
