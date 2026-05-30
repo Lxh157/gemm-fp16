@@ -25,6 +25,7 @@ NCU_TARGET_PROCESSES="${NCU_TARGET_PROCESSES:-all}"
 NCU_SIZES="${NCU_SIZES:-4096}"
 NCU_WARMUP="${NCU_WARMUP:-0}"
 NCU_REPEAT="${NCU_REPEAT:-1}"
+NCU_TMPDIR="${NCU_TMPDIR:-${OUT_ROOT:-profiles/ncu}/tmp}"
 
 MMA_BEST_IMPL="${MMA_BEST_IMPL:-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync}"
 CUBLASLT_IMPL="${CUBLASLT_IMPL:-cublaslt_fp16acc}"
@@ -33,7 +34,21 @@ OUT_ROOT="${OUT_ROOT:-profiles/ncu}"
 MMA_OUT_DIR="${MMA_OUT_DIR:-${OUT_ROOT}/ncu_mma_best}"
 CUBLASLT_OUT_DIR="${CUBLASLT_OUT_DIR:-${OUT_ROOT}/ncu_cublaslt}"
 
-mkdir -p "${MMA_OUT_DIR}" "${CUBLASLT_OUT_DIR}"
+mkdir -p "${MMA_OUT_DIR}" "${CUBLASLT_OUT_DIR}" "${NCU_TMPDIR}"
+export TMPDIR="${NCU_TMPDIR}"
+
+NCU_LOCK_FILE="/tmp/nsight-compute-lock"
+if [[ -e "${NCU_LOCK_FILE}" && ! -w "${NCU_LOCK_FILE}" ]]; then
+  echo "[ERROR] Nsight Compute lock file exists but is not writable: ${NCU_LOCK_FILE}"
+  echo "Current state:"
+  ls -l "${NCU_LOCK_FILE}" || true
+  echo
+  echo "Fix on the server, then rerun:"
+  echo "  ls -l ${NCU_LOCK_FILE}"
+  echo "  rm -f ${NCU_LOCK_FILE}      # if you own it"
+  echo "  sudo rm -f ${NCU_LOCK_FILE} # if it is owned by another user/root"
+  exit 1
+fi
 
 if [[ ! -x "${BIN}" ]]; then
   echo "[ERROR] binary not found: ${BIN}"
@@ -80,6 +95,7 @@ echo "# ncu_bin=${NCU_BIN}"
 echo "# ncu_set=${NCU_SET}"
 echo "# ncu_page=${NCU_PAGE}"
 echo "# sizes=${NCU_SIZES}"
+echo "# tmpdir=${TMPDIR}"
 echo "# mma_best_impl=${MMA_BEST_IMPL}"
 echo "# cublaslt_impl=${CUBLASLT_IMPL}"
 echo

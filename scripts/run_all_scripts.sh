@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 一次性跑 run_bench.sh + raw_to_csv.py。
-# bash scripts/run_all_scripts.sh
+# 一次性构建 + 跑 run_bench.sh + raw_to_csv.py + plot.py + NCU。
 # 自动选择一张空闲 RTX 4090。判定口径：
 #   1) GPU 名称包含 4090
 #   2) 没有 compute process
@@ -12,6 +11,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 EMPTY_MEM_MB="${EMPTY_MEM_MB:-1024}"
+BUILD_DIR="${BUILD_DIR:-build}"
+RUN_NCU="${RUN_NCU:-1}"
 
 echo "=== nvidia-smi ==="
 nvidia-smi
@@ -83,8 +84,14 @@ if [[ -z "${SELECTED_GPU}" ]]; then
 fi
 
 echo
+echo "=== build bench_gemm ==="
+cmake -S . -B "${BUILD_DIR}"
+cmake --build "${BUILD_DIR}" -j
+
+echo
 echo "=== run benchmark on physical GPU ${SELECTED_GPU} ==="
 CUDA_VISIBLE_DEVICES="${SELECTED_GPU}" \
+BUILD_DIR="${BUILD_DIR}" \
 CHECK_MAX_SIZE=256 \
 PROFILE_SET=phase2_4090_tc \
 bash scripts/run_bench.sh
@@ -93,5 +100,17 @@ echo
 echo "=== extract latest raw result to csv ==="
 python3 scripts/raw_to_csv.py
 
-echo "=== output plot ==="
+echo
+echo "=== generate plots ==="
 python3 scripts/plot.py
+
+if [[ "${RUN_NCU}" == "1" ]]; then
+  echo
+  echo "=== run NCU comparison on physical GPU ${SELECTED_GPU} ==="
+  CUDA_VISIBLE_DEVICES="${SELECTED_GPU}" \
+  BUILD_DIR="${BUILD_DIR}" \
+  bash scripts/run_ncu_compare.sh
+else
+  echo
+  echo "=== skip NCU comparison because RUN_NCU=${RUN_NCU} ==="
+fi
