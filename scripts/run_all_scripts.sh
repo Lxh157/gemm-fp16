@@ -93,3 +93,5 @@ echo
 echo "=== extract latest raw result to csv ==="
 python3 scripts/raw_to_csv.py
 
+echo "=== output plot ==="
+python3 scripts/plot.py
