@@ -7,6 +7,7 @@ set -euo pipefail
 #   PROFILE_SET=phase1_4060_all bash scripts/run_bench.sh
 #   BUILD_DIR=build WARMUP=3 REPEAT=10 bash scripts/run_bench.sh
 #   SIZES_OVERRIDE="1024 2048 4096" PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
+#   IMPLS_OVERRIDE="mma_fp16acc_m16n32_k32_vs cublaslt_fp16acc" bash scripts/run_bench.sh
 #   CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 #   CUDA_VISIBLE_DEVICES=1 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 
@@ -97,6 +98,7 @@ case "${PROFILE_SET}" in
       mma_fp16acc_m16n32_k32_4x2
       mma_fp16acc_m16n32_k32_4x4
       mma_fp16acc_m16n32_staged_cpasync_k32_4x2
+      mma_fp16acc_m16n32_k32_vs
       mma_fp16acc_m16n32_staged_cpasync_k64_4x2
       mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16
       mma_fp16acc_m16n32_staged_cpasync_ca_k64_4x2_skew16
@@ -120,6 +122,10 @@ case "${PROFILE_SET}" in
     exit 1
     ;;
 esac
+
+if [[ -n "${IMPLS_OVERRIDE:-}" ]]; then
+  read -r -a IMPLS <<< "${IMPLS_OVERRIDE}"
+fi
 
 TS=$(date +%Y%m%d_%H%M%S)
 OUT_TXT="${OUT_DIR}/${OUT_PREFIX}_${TS}.txt"

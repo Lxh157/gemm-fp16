@@ -27,7 +27,7 @@ NCU_WARMUP="${NCU_WARMUP:-0}"
 NCU_REPEAT="${NCU_REPEAT:-1}"
 NCU_TMPDIR="${NCU_TMPDIR:-${OUT_ROOT:-profiles/ncu}/tmp}"
 
-MMA_BEST_IMPL="${MMA_BEST_IMPL:-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync}"
+MMA_BEST_IMPL="${MMA_BEST_IMPL:-mma_fp16acc_m16n32_k32_vs}"
 CUBLASLT_IMPL="${CUBLASLT_IMPL:-cublaslt_fp16acc}"
 
 OUT_ROOT="${OUT_ROOT:-profiles/ncu}"

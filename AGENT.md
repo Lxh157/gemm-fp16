@@ -6,44 +6,40 @@ This repository is a CUDA GEMM optimization lab focused on FP32, FP16-input FP32
 
 The benchmark entrypoint is `src/main_bench.cu`, which dispatches kernels by `--impl`. The build target is `bench_gemm`.
 
-Current main direction:
+Current main direction is FP16-input FP32-accumulate Tensor Core optimization using inline PTX MMA, `ldmatrix`, and `cp.async`.
 
-- Phase 1: RTX 4060 Laptop / WSL2, full learning chain from naive FP32 to tiled, register blocking, FP16 input, WMMA, staged WMMA, and cp.async.
-- Phase 2: RTX 4090 / CUDA 11.8, Tensor Core mainline optimization. The early Phase 2 route was WMMA; the current route is inline PTX MMA + ldmatrix + cp.async.
-
-Current best custom kernel:
+Current best custom kernel on the local RTX 4060 Laptop:
 
 ```text
 file:
-src/fp16_mma/gemm_mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync.cu
+src/fp16_mma/gemm_mma_fp16acc_m16n32_k32_vs.cu
 
 impl:
-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+mma_fp16acc_m16n32_k32_vs
 ```
 
-Latest 4090 reference data is in:
+Latest local 4060 comparison data is in:
 
 ```text
-results/table/bench_phase2_4090_tc_20260530_195030.csv
+results/table/bench_phase2_4090_tc_20260604_202439.csv
 ```
 
-At 4096, current best custom is about `126.6 TFLOP/s`, roughly `78.6%` of the current `cublaslt_fp16acc` baseline in this repo.
+At 4096 on the local 4060, `mma_fp16acc_m16n32_k32_vs` reaches about `14.1 TFLOP/s`, roughly `87.1%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
 
 The project is intentionally experimental. Some implementations under `src/fail/` are kept as failed or superseded variants for comparison and should not be cleaned up casually.
 
 ## Collaboration Workflow
 
-The active development workflow is:
+The active development workflow is a direct local optimization loop:
 
-1. Edit code locally in this repository.
-2. Do not run GPU benchmarks locally unless explicitly asked; the local machine may not have an RTX 4090.
-3. The user copies/syncs code to the 4090 server and runs it there.
-4. The user syncs generated results back locally, usually under:
-   - `results/raw/`
-   - `results/table/`
-   - `results/plots/`
-   - `profiles/ncu/`
-5. Read those result files locally and decide the next experiment.
+1. Read the latest same-device benchmark and NCU data.
+2. Choose one focused optimization direction.
+3. Add and wire a comparison kernel.
+4. Build, run correctness checks, benchmark, and profile locally on the RTX 4060 Laptop.
+5. Analyze the result, commit the completed round, and push it.
+6. Start the next round from the new evidence.
+
+Use only same-device, same-run comparisons for performance conclusions. RTX 4090 results remain useful historical references but must not be compared numerically with local RTX 4060 runs.
 
 When reporting new kernel changes, the preferred response shape is:
 
@@ -107,11 +103,11 @@ build/bench_gemm
 
 ## Run Single Benchmark
 
-Current best custom kernel:
+Current best local custom kernel:
 
 ```bash
 ./build/bench_gemm \
-  --impl mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync \
+  --impl mma_fp16acc_m16n32_k32_vs \
   --M 4096 --N 4096 --K 4096 \
   --warmup 3 --repeat 10 --no-check
 ```
@@ -225,10 +221,10 @@ Use the text-only script:
 bash scripts/run_ncu_compare.sh
 ```
 
-It compares:
+It compares by default:
 
 ```text
-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+mma_fp16acc_m16n32_k32_vs
 cublaslt_fp16acc
 ```
 
@@ -318,24 +314,24 @@ Many Tensor Core kernels require dimensions to be multiples of tile sizes. Prese
 
 ## Current Technical Conclusions
 
-Current best custom 4090 kernel:
+Current best local 4060 kernel:
 
 ```text
-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+mma_fp16acc_m16n32_k32_vs
 ```
 
 Working conclusions:
 
 - Moving from WMMA to inline MMA / ldmatrix gave a major improvement.
-- K64 is the current MMA mainline depth.
-- `skew16` is the best padding point observed so far; `skew32` is worse.
+- K32 is the current local 4060 mainline depth; its smaller shared-memory footprint beats the previous K64 mainline across 512-4096.
+- The historical 4090 best remains the K64 `skew16` vector-store/skip-last-sync variant until K32 is validated there.
 - `cp.async.cg` is better than the tested `cp.async.ca` variant.
 - `float2` vectorized C store was a clear win.
 - Skipping the final unnecessary sync is a small but stable large-shape win.
 - `nocheck` store and current B-fragment prefetch are not better mainlines.
 - `m16n64` variants tested so far are not better than the current `m16n32 4x2` mainline.
 
-The current optimization path has entered small local changes. The next high-value step is NCU comparison against `cublaslt_fp16acc` to identify whether the gap is dominated by tensor pipe utilization, shared/ldmatrix behavior, occupancy/register pressure, or pipeline organization.
+NCU shows that K32 reduces shared-load pressure and short-scoreboard stalls while increasing barrier stalls. The next high-value direction is to retain K32's low shared-memory pressure while reducing synchronization cost or overlapping it with useful work.
 
 ## Repository Hygiene
 
