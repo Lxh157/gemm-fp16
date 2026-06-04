@@ -2,18 +2,75 @@
 
 ## Project Overview
 
-This repository is a CUDA GEMM optimization lab focused on FP32, FP16, WMMA, Tensor Core, and profiling-driven iteration.
+This repository is a CUDA GEMM optimization lab focused on FP32, FP16-input FP32-accumulate, WMMA, inline MMA, Tensor Core, and profiling-driven iteration.
 
 The benchmark entrypoint is `src/main_bench.cu`, which dispatches kernels by `--impl`. The build target is `bench_gemm`.
 
 Current main direction:
 
 - Phase 1: RTX 4060 Laptop / WSL2, full learning chain from naive FP32 to tiled, register blocking, FP16 input, WMMA, staged WMMA, and cp.async.
-- Phase 2: RTX 4090 / CUDA 11.8, Tensor Core mainline optimization. The current best custom kernel is:
-  - file: `src/gemm_wmma_fp16acc_staged_cpasync_k64_4x4_skew16.cu`
-  - impl: `wmma_fp16acc_staged_cpasync_k64_4x4_skew16`
+- Phase 2: RTX 4090 / CUDA 11.8, Tensor Core mainline optimization. The early Phase 2 route was WMMA; the current route is inline PTX MMA + ldmatrix + cp.async.
+
+Current best custom kernel:
+
+```text
+file:
+src/fp16_mma/gemm_mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync.cu
+
+impl:
+mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+```
+
+Latest 4090 reference data is in:
+
+```text
+results/table/bench_phase2_4090_tc_20260530_195030.csv
+```
+
+At 4096, current best custom is about `126.6 TFLOP/s`, roughly `78.6%` of the current `cublaslt_fp16acc` baseline in this repo.
 
 The project is intentionally experimental. Some implementations under `src/fail/` are kept as failed or superseded variants for comparison and should not be cleaned up casually.
+
+## Collaboration Workflow
+
+The active development workflow is:
+
+1. Edit code locally in this repository.
+2. Do not run GPU benchmarks locally unless explicitly asked; the local machine may not have an RTX 4090.
+3. The user copies/syncs code to the 4090 server and runs it there.
+4. The user syncs generated results back locally, usually under:
+   - `results/raw/`
+   - `results/table/`
+   - `results/plots/`
+   - `profiles/ncu/`
+5. Read those result files locally and decide the next experiment.
+
+When reporting new kernel changes, the preferred response shape is:
+
+```text
+已新增并接入 ...
+新增文件:
+...
+已更新:
+...
+新 impl:
+...
+对照变量:
+...
+服务器上先单点:
+...
+通过后跑全量:
+...
+```
+
+Keep kernel filenames reasonably short. Avoid endlessly appending long suffixes. Preferred short suffixes:
+
+```text
+vs  = vector store
+sls = skip last sync
+bpf = B fragment prefetch
+nc  = no check
+```
 
 ## Environment
 
@@ -42,14 +99,6 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-Equivalent existing workflow:
-
-```bash
-cd build
-cmake ..
-make -j
-```
-
 Build output:
 
 ```text
@@ -58,16 +107,22 @@ build/bench_gemm
 
 ## Run Single Benchmark
 
-Example:
+Current best custom kernel:
 
 ```bash
-./build/bench_gemm --impl wmma_fp16acc_staged_cpasync_k64_4x4_skew16 --M 1024 --N 1024 --K 1024 --warmup 3 --repeat 10
+./build/bench_gemm \
+  --impl mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync \
+  --M 4096 --N 4096 --K 4096 \
+  --warmup 3 --repeat 10 --no-check
 ```
 
-For larger sizes, correctness checking can be skipped to avoid slow CPU reference:
+cuBLASLt baseline:
 
 ```bash
-./build/bench_gemm --impl wmma_fp16acc_staged_cpasync_k64_4x4_skew16 --M 4096 --N 4096 --K 4096 --warmup 3 --repeat 10 --no-check
+./build/bench_gemm \
+  --impl cublaslt_fp16acc \
+  --M 4096 --N 4096 --K 4096 \
+  --warmup 3 --repeat 10 --no-check
 ```
 
 Output format of interest:
@@ -82,10 +137,10 @@ Use median GFLOP/s as the stable performance metric.
 
 ## Batch Benchmark
 
-Default batch script:
+Default Phase 2 batch script:
 
 ```bash
-PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
+CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 ```
 
 Useful overrides:
@@ -96,7 +151,15 @@ CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 CUDA_VISIBLE_DEVICES=1 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 ```
 
-Raw outputs are written under `results/raw/`. This directory is ignored except for `.gitkeep`.
+Raw outputs are written under `results/raw/`.
+
+CSV extraction:
+
+```bash
+python3 scripts/raw_to_csv.py
+```
+
+CSV outputs are written under `results/table/`.
 
 ## Plotting
 
@@ -114,62 +177,127 @@ python3 -m pip install --user matplotlib
 
 if plotting dependencies are missing.
 
+Current Phase 2 MMA plots:
+
+```text
+results/plots/gflops_phase2_4090_tc_mma.png
+results/plots/rel_to_cublaslt_phase2_4090_tc_mma.png
+```
+
+## One-Command Server Workflow
+
+`scripts/run_all_scripts.sh` automatically chooses a free RTX 4090 and runs:
+
+```text
+cmake configure
+cmake build
+benchmark sweep
+raw_to_csv
+plot
+NCU compare
+```
+
+Default:
+
+```bash
+bash scripts/run_all_scripts.sh
+```
+
+Skip NCU:
+
+```bash
+RUN_NCU=0 bash scripts/run_all_scripts.sh
+```
+
+Choose NCU sizes:
+
+```bash
+NCU_SIZES="2048 4096" bash scripts/run_all_scripts.sh
+```
+
 ## Profiling
 
 Nsight Compute runs perturb timing. Do not use NCU-reported runtime or GFLOP/s as final performance conclusions. Use NCU for stall and pipeline diagnosis only.
 
-Typical command:
+Use the text-only script:
 
 ```bash
-ncu --set full --target-processes all --force-overwrite \
-  ./build/bench_gemm --impl wmma_fp16acc_staged_cpasync_k64_4x4_skew16 \
-  --M 2048 --N 2048 --K 2048 --warmup 0 --repeat 1 --no-check
+bash scripts/run_ncu_compare.sh
 ```
 
-Profile artifacts belong under:
+It compares:
 
 ```text
-profiles/ncu/
-profiles/nsys/
+mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+cublaslt_fp16acc
 ```
 
-These directories are ignored except for `.gitkeep`.
+Default output:
+
+```text
+profiles/ncu/ncu_mma_best/*.txt
+profiles/ncu/ncu_cublaslt/*.txt
+```
+
+The script intentionally does not pass `--export`, so it should not generate `.ncu-rep` files.
+
+Common overrides:
+
+```bash
+NCU_SIZES="2048 3072 4096" bash scripts/run_ncu_compare.sh
+NCU_SET=full NCU_PAGE=raw bash scripts/run_ncu_compare.sh
+NCU_BIN=/path/to/ncu bash scripts/run_ncu_compare.sh
+```
+
+On shared servers, Nsight Compute may fail on `/tmp/nsight-compute-lock`. The script checks the lock owner and reports it. Do not delete another user's lock without confirming it is stale or getting permission.
+
+First NCU comparison should focus on:
+
+- SM / Tensor Core utilization
+- achieved occupancy / active warps
+- eligible warps per scheduler
+- warp stall reasons
+- shared memory throughput, bank conflict, ldmatrix pressure
+- global memory and cp.async behavior
+- instruction mix
 
 ## Source Layout
 
-Important files:
+Important files and directories:
 
 - `src/main_bench.cu`: argument parsing, CPU reference, FP32/FP16 input setup, launcher dispatch, timing.
 - `src/utils.cuh`: CUDA error macro, random initialization, CPU reference GEMM, allclose check, GFLOP/s and timing stats.
-- `src/gemm_*.cu`: custom GEMM implementations.
-- `src/cublas*.cu`: cuBLAS and cuBLASLt baselines.
-- `scripts/run_bench.sh`: batch runner.
+- `src/fp32/`: FP32 custom kernels and FP32 cuBLAS/cuBLASLt baselines.
+- `src/fp16_acc/`: non-Tensor-Core FP16-input FP32-accumulate kernels and cuBLAS GEMMEx baseline.
+- `src/fp16_wmma/`: WMMA Tensor Core kernels.
+- `src/fp16_mma/`: inline MMA / ldmatrix Tensor Core kernels.
+- `src/fail/`: failed or superseded WMMA variants kept for comparison.
+- `src/cublaslt_fp16acc.cu`: cuBLASLt FP16-input FP32-accumulate baseline.
+- `scripts/run_bench.sh`: batch benchmark runner.
+- `scripts/raw_to_csv.py`: parse latest raw result into CSV.
 - `scripts/plot.py`: raw result parser and plot generator.
+- `scripts/run_ncu_compare.sh`: text-only NCU comparison.
+- `scripts/run_all_scripts.sh`: build + bench + csv + plot + NCU orchestration.
 - `scripts/collect_env.sh`: basic environment capture.
 
 ## Adding A New Kernel
 
 When adding a new implementation:
 
-1. Add a new `src/*.cu` file with a launcher matching the local pattern:
+1. Add a new `.cu` file under the appropriate source directory:
 
-```cpp
-void launch_gemm_<name>(const half* dA, const half* dB, float* dC,
-                        int M, int N, int K, cudaStream_t stream);
-```
-
-or for FP32 kernels:
-
-```cpp
-void launch_gemm_<name>(const float* dA, const float* dB, float* dC,
-                        int M, int N, int K, cudaStream_t stream);
+```text
+src/fp32/
+src/fp16_acc/
+src/fp16_wmma/
+src/fp16_mma/
 ```
 
 2. Add the file to `add_executable(bench_gemm ...)` in `CMakeLists.txt`.
 3. Add a forward declaration in `src/main_bench.cu`.
 4. Add the impl string to the `--impl` validation list.
 5. Add the impl string to `use_fp16_inputs` if it consumes half inputs.
-6. Add a dispatch branch in `launch_selected`.
+6. Add a dispatch branch in `main_bench.cu`.
 7. Add it to `scripts/run_bench.sh` if it should be part of a batch profile set.
 8. Add it to `scripts/plot.py` if it should appear in plots.
 
@@ -186,25 +314,32 @@ Current tolerances:
 
 For large benchmark sweeps, use `--no-check` or set `CHECK_MAX_SIZE` in `scripts/run_bench.sh` so the CPU reference does not dominate runtime.
 
-Many WMMA kernels require dimensions to be multiples of tile sizes. Preserve explicit guard checks in launchers and print clear errors when shape requirements are violated.
+Many Tensor Core kernels require dimensions to be multiples of tile sizes. Preserve explicit guard checks in launchers and print clear errors when shape requirements are violated.
 
 ## Current Technical Conclusions
 
-The current best custom 4090 kernel is `wmma_fp16acc_staged_cpasync_k64_4x4_skew16`.
+Current best custom 4090 kernel:
 
-Working conclusions from the README:
+```text
+mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+```
 
-- `skew16` improved the old `k32` path through better readiness, barrier behavior, and memory feed.
-- `k64` helps small shapes mainly by reducing K-loop, synchronization, and control overhead.
-- `k64_4x4_skew16` is strongest for larger shapes because of tile/work organization and resource rebalance, not because every low-level shared-memory metric becomes cleaner.
-- The gap to cuBLASLt is not likely to be solved by blind pitch or tile-shape sweeps alone. The vendor kernel appears to operate in a deeper tensor-pipeline-dominated regime.
+Working conclusions:
 
-Next work should focus on source-level stall diagnosis around `wmma_fp16acc_staged_cpasync_k64_4x4_skew16` and on moving from WMMA toward lower-level MMA / ldmatrix data paths.
+- Moving from WMMA to inline MMA / ldmatrix gave a major improvement.
+- K64 is the current MMA mainline depth.
+- `skew16` is the best padding point observed so far; `skew32` is worse.
+- `cp.async.cg` is better than the tested `cp.async.ca` variant.
+- `float2` vectorized C store was a clear win.
+- Skipping the final unnecessary sync is a small but stable large-shape win.
+- `nocheck` store and current B-fragment prefetch are not better mainlines.
+- `m16n64` variants tested so far are not better than the current `m16n32 4x2` mainline.
+
+The current optimization path has entered small local changes. The next high-value step is NCU comparison against `cublaslt_fp16acc` to identify whether the gap is dominated by tensor pipe utilization, shared/ldmatrix behavior, occupancy/register pressure, or pipeline organization.
 
 ## Repository Hygiene
 
-- Do not commit build outputs, raw logs, NCU/NSYS reports, or generated caches.
-- `results/plots/*.png` are currently present and may be used in README documentation.
+- Do not commit build outputs, raw logs unless intentionally documenting an experiment, `.ncu-rep`, `.nsys-rep`, or generated caches.
+- `results/raw/`, `results/table/`, and `results/plots/` are used in the local/server sync workflow.
 - Avoid broad cleanup of `src/fail/`; these files document explored variants.
 - Keep changes scoped. This repository values benchmark comparability, so do not silently change timing, correctness tolerances, input generation, or output parsing formats.
-
