@@ -90,6 +90,7 @@ PHASE2_4090_IMPLS = [
     # "mma_fp16acc_m16n32_k32_4x4",
     # "mma_fp16acc_m16n32_staged_cpasync_k32_4x2",
     "mma_fp16acc_m16n32_k32_vs",
+    "mma_fp16acc_m16n32_k32_4x4_vs",
     # "mma_fp16acc_m16n32_staged_cpasync_k64_4x2",
     # "mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16",
     # "mma_fp16acc_m16n32_staged_cpasync_ca_k64_4x2_skew16",

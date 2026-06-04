@@ -21,10 +21,10 @@ mma_fp16acc_m16n32_k32_vs
 Latest local 4060 comparison data is in:
 
 ```text
-results/table/bench_phase2_4090_tc_20260604_202439.csv
+results/table/bench_phase2_4090_tc_20260605_010044.csv
 ```
 
-At 4096 on the local 4060, `mma_fp16acc_m16n32_k32_vs` reaches about `14.1 TFLOP/s`, roughly `87.1%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
+At 4096 in the latest local 4060 comparison, `mma_fp16acc_m16n32_k32_vs` reaches about `13.7 TFLOP/s`, roughly `83.6%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
 
 The project is intentionally experimental. Some implementations under `src/fail/` are kept as failed or superseded variants for comparison and should not be cleaned up casually.
 
@@ -330,8 +330,9 @@ Working conclusions:
 - Skipping the final unnecessary sync is a small but stable large-shape win.
 - `nocheck` store and current B-fragment prefetch are not better mainlines.
 - `m16n64` variants tested so far are not better than the current `m16n32 4x2` mainline.
+- The K32 `4x4` CTA comparison reduces short-scoreboard stalls but does not reduce barrier stalls. Its 512-thread block lowers Tensor Core utilization and is slower than K32 `4x2`.
 
-NCU shows that K32 reduces shared-load pressure and short-scoreboard stalls while increasing barrier stalls. The next high-value direction is to retain K32's low shared-memory pressure while reducing synchronization cost or overlapping it with useful work.
+NCU shows that K32 reduces shared-load pressure and short-scoreboard stalls while increasing barrier stalls. Keep the `4x2` CTA shape; the next high-value direction is to reduce synchronization cost or improve pipeline overlap without increasing the block warp count.
 
 ## Repository Hygiene
 
