@@ -331,6 +331,7 @@ Working conclusions:
 - `nocheck` store and current B-fragment prefetch are not better mainlines.
 - `m16n64` variants tested so far are not better than the current `m16n32 4x2` mainline.
 - The K32 `4x4` CTA comparison reduces short-scoreboard stalls but does not reduce barrier stalls. Its 512-thread block lowers Tensor Core utilization and is slower than K32 `4x2`.
+- K32 symmetric `skew16` is worse than `skew8`: it nearly doubles shared-load pressure and increases short-scoreboard stalls.
 
 NCU shows that K32 reduces shared-load pressure and short-scoreboard stalls while increasing barrier stalls. Keep the `4x2` CTA shape; the next high-value direction is to reduce synchronization cost or improve pipeline overlap without increasing the block warp count.
 
