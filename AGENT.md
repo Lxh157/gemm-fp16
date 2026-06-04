@@ -21,7 +21,7 @@ mma_fp16acc_m16n32_k32_vs
 Latest local 4060 comparison data is in:
 
 ```text
-results/table/bench_phase2_4090_tc_20260605_010044.csv
+results/table/bench_phase2_4090_tc_20260605_012329.csv
 ```
 
 At 4096 in the latest local 4060 comparison, `mma_fp16acc_m16n32_k32_vs` reaches about `13.7 TFLOP/s`, roughly `83.6%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
@@ -333,6 +333,7 @@ Working conclusions:
 - The K32 `4x4` CTA comparison reduces short-scoreboard stalls but does not reduce barrier stalls. Its 512-thread block lowers Tensor Core utilization and is slower than K32 `4x2`.
 - K32 symmetric `skew16` is worse than `skew8`: it nearly doubles shared-load pressure and increases short-scoreboard stalls.
 - K32 A-only `skew16` is also worse than the base A `skew8`, increasing shared-load pressure and short-scoreboard stalls.
+- K32 B-only `skew16` is worse as well and increases shared-load pressure more than A-only `skew16`. Keep both A and B at `skew8`; further padding tuning is low value.
 
 NCU shows that K32 reduces shared-load pressure and short-scoreboard stalls while increasing barrier stalls. Keep the `4x2` CTA shape; the next high-value direction is to reduce synchronization cost or improve pipeline overlap without increasing the block warp count.
 
