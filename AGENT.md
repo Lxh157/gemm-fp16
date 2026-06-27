@@ -24,7 +24,7 @@ Latest local 4060 comparison data is in:
 results/table/bench_phase2_4090_tc_20260605_012329.csv
 ```
 
-At 4096 in the latest local 4060 comparison, `mma_fp16acc_m16n32_k32_vs` reaches about `13.7 TFLOP/s`, roughly `83.6%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
+At 4096 in the latest local 4060 comparison, `mma_fp16acc_m16n32_k32_vs` reaches about `15.7 TFLOP/s`, roughly `88.2%` of the same-run `cublaslt_fp16acc` baseline. Do not compare this directly with historical RTX 4090 results.
 
 The project is intentionally experimental. Some implementations under `src/fail/` are kept as failed or superseded variants for comparison and should not be cleaned up casually.
 
@@ -143,6 +143,7 @@ Useful overrides:
 
 ```bash
 PROFILE_SET=phase2_4090_tc SIZES_OVERRIDE="1024 2048 4096" bash scripts/run_bench.sh
+PROFILE_SET=phase2_4090_tc IMPLS_OVERRIDE="mma_fp16acc_m16n32_k32_vs cublaslt_fp16acc" bash scripts/run_bench.sh
 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 CUDA_VISIBLE_DEVICES=1 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 ```
@@ -240,10 +241,14 @@ The script intentionally does not pass `--export`, so it should not generate `.n
 Common overrides:
 
 ```bash
+NCU_SIZES=1024 bash scripts/run_ncu_compare.sh
+MMA_BEST_IMPL=mma_fp16acc_m16n32_k32_vs NCU_SIZES=1024 bash scripts/run_ncu_compare.sh
 NCU_SIZES="2048 3072 4096" bash scripts/run_ncu_compare.sh
 NCU_SET=full NCU_PAGE=raw bash scripts/run_ncu_compare.sh
 NCU_BIN=/path/to/ncu bash scripts/run_ncu_compare.sh
 ```
+
+On the local WSL + RTX 4060 setup, full NCU at 4096 has failed before. Use 1024 for routine diagnosis unless a larger profile is specifically needed.
 
 On shared servers, Nsight Compute may fail on `/tmp/nsight-compute-lock`. The script checks the lock owner and reports it. Do not delete another user's lock without confirming it is stale or getting permission.
 

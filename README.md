@@ -1,24 +1,24 @@
 # CUDA GEMM Optimization Practice
 
-这个仓库是一个 CUDA GEMM 优化实验项目，目标是把 GEMM 从基础 FP32 kernel 一路推进到 FP16 input / FP32 accumulate / Tensor Core，并用 benchmark、图表和 Nsight Compute 指标驱动后续优化。
+这个仓库是一个 CUDA GEMM 优化实验项目，目标是把 GEMM 从基础 FP32 kernel 推进到 FP16 input / FP32 accumulate / Tensor Core，并用 benchmark、图表和 Nsight Compute 文本指标驱动后续优化。
 
 当前主线按 FP16/Tensor Core 优化路线组织：
 
 - FP32 naive / tiled / register-blocking kernels 用作基础优化练习和框架验证。
 - FP16 input / FP32 accumulate 的 non-Tensor-Core kernels 用作对照。
 - WMMA kernels 用于建立 Tensor Core staged / cp.async 数据供给路径。
-- 当前重点是 inline PTX MMA + ldmatrix + cp.async 主线，并与 cuBLASLt FP16acc baseline 对比。
+- 当前重点是 inline PTX MMA + `ldmatrix` + `cp.async`，并与 `cublaslt_fp16acc` baseline 对比。
 
 ## 当前状态
 
-当前最强 custom kernel 是：
+当前本地 RTX 4060 Laptop 最强 custom kernel 是：
 
 ```text
 impl:
-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+mma_fp16acc_m16n32_k32_vs
 
 file:
-src/fp16_mma/gemm_mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync.cu
+src/fp16_mma/gemm_mma_fp16acc_m16n32_k32_vs.cu
 ```
 
 它的核心组织：
@@ -29,51 +29,63 @@ src/fp16_mma/gemm_mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skipla
 - CTA tile: `64x64`
 - warp tile: `16x32`
 - warp layout: `4x2`
-- K stage depth: `64`
-- shared padding: `skew16`
+- K stage depth: `32`
+- shared padding: A/B 都为 `skew8`
 - global-to-shared: double-buffered `cp.async.cg`
 - C 写回: `float2` vectorized store
 - main loop: skip final unnecessary `__syncthreads()`
 
-最新阶段性结论：
-
-- `skew16` 仍是当前 padding 参数里的最优点；更大的 `skew32` 明显回退。
-- `cp.async.cg` 优于当前试过的 `cp.async.ca` 对照。
-- `K64 + 4x2 warp` 是当前 MMA 主线基础。
-- `float2` 写回是一次明确有效的提升。
-- `skiplastsync` 在大尺寸上稳定带来约 `0.4% ~ 0.6%` 的小幅收益。
-- `nocheck store` 和 B fragment prefetch 对大尺寸没有成为新主线。
-- 当前已经进入小幅局部优化区间，下一步重点转向 Nsight Compute 对比 custom kernel 与 cuBLASLt 的瓶颈差异。
-
-## 最新结果摘录
-
-数据来自：
+最新本地数据：
 
 ```text
-results/table/bench_phase2_4090_tc_20260530_195030.csv
+results/table/bench_phase2_4090_tc_20260605_012329.csv
 ```
 
-测试环境为 RTX 4090 / CUDA 11.8。单位：GFLOP/s，取 benchmark 输出的 median。
+该数据来自 RTX 4060 Laptop，同轮比较如下，单位为 GFLOP/s，取 benchmark 输出的 median：
 
 | impl | 1024 | 2048 | 3072 | 4096 |
 | --- | ---: | ---: | ---: | ---: |
-| `wmma_fp16acc_staged_cpasync_k64_4x4_skew16` | 87381 | 105954 | 109735 | 111113 |
-| `mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16` | 80660 | 111107 | 120219 | 123623 |
-| `mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore` | 95325 | 118908 | 124446 | 126026 |
-| `mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync` | 95529 | 119225 | 125272 | 126619 |
-| `mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync_nocheck` | 95325 | 118737 | 124446 | 125700 |
-| `mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync_bprefetch` | 95325 | 119411 | 124785 | 126102 |
-| `mma_fp16acc_m16n64_staged_cpasync_k64_4x1_skew16` | 80660 | 108943 | 117232 | 121634 |
-| `cublaslt_fp16acc` | 67650 | 145889 | 155558 | 160996 |
+| `mma_fp16acc_m16n32_k32_vs` | 14463 | 15986 | 16197 | 15726 |
+| `mma_fp16acc_m16n32_k32_b16_vs` | 14364 | 15843 | 14748 | 15569 |
+| `cublaslt_fp16acc` | 15087 | 17839 | 18614 | 17829 |
 
-4096 上当前 best custom kernel 达到约：
+4096 上当前 best custom kernel 约为：
 
 ```text
-126.6 TFLOP/s
-约为当前 cublasLt baseline 的 78.6%
+15.73 TFLOP/s
+约为同轮 cublasLt baseline 的 88.2%
 ```
 
-注意：`1024` 上 custom kernel 高于当前仓库口径的 `cublaslt_fp16acc`，但大尺寸上 cuBLASLt 明显领先。后续需要 NCU 判断差距来自 tensor pipe 利用率、shared/ldmatrix、warp readiness、occupancy，还是更深层的 pipeline 组织差异。
+不要把本地 4060 结果和历史 RTX 4090 结果直接数值比较。历史 4090 数据仍可作为实验记录和方向参考，但结论必须基于同设备、同环境、同轮 benchmark。
+
+## 最新技术结论
+
+已经确认有效的方向：
+
+- 从 WMMA 下沉到 inline MMA / `ldmatrix` 是大幅提升方向。
+- 在本地 RTX 4060 上，K32 staged 主线优于历史 K64 主线；较小 shared footprint 明显降低 shared-load 压力。
+- `cp.async.cg` 优于当前试过的 `cp.async.ca` 对照。
+- `float2` vectorized C store 是明确收益。
+- 跳过最后一轮无必要 CTA sync 是稳定小收益。
+
+已经确认不是当前主线的方向：
+
+- K32 `4x4` CTA：short-scoreboard 降低，但 barrier stall 基本不降，512-thread block 降低 Tensor Core 利用率，整体慢于 `4x2`。
+- K32 symmetric `skew16`：shared-load 压力和 short-scoreboard 明显恶化。
+- K32 A-only `skew16`：慢于 A `skew8`，shared-load 压力上升。
+- K32 B-only `skew16`：也慢于 B `skew8`，shared-load 压力恶化更明显。
+- `skew32`
+- `cp.async.ca`
+- `m16n64 4x1 / 4x2` 作为替代主线
+- `nocheck` store
+- 当前写法的 B fragment prefetch
+
+下一步高价值方向：
+
+1. 保持 K32、`4x2` CTA、A/B `skew8`。
+2. 在不增加 block warp 数的前提下，降低同步成本或改善 pipeline overlap。
+3. 继续用 NCU 文本指标判断 Tensor Core utilization、barrier stall、short-scoreboard、shared-load 压力和 eligible warps。
+4. 避免继续只做 padding 或 CTA 扩大这类已经证伪的 sweep。
 
 ## 环境
 
@@ -85,15 +97,7 @@ results/table/bench_phase2_4090_tc_20260530_195030.csv
 set(CMAKE_CUDA_ARCHITECTURES 89)
 ```
 
-当前主要测试服务器环境：
-
-```bash
-export CUDA_HOME=/usr/local/cuda-11.8
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-```
-
-依赖：
+常用依赖：
 
 - CMake 3.18+
 - CUDA Toolkit
@@ -116,28 +120,10 @@ gemm-fp16/
     cublaslt_fp16acc.cu
 
     fp32/
-      gemm_naive.cu
-      gemm_tiled.cu
-      gemm_tiled_rb1x4.cu
-      gemm_tiled_rb2x4.cu
-      gemm_thread_tiled_1d.cu
-      gemm_cublas.cu
-      cublaslt_baseline.cu
-
     fp16_acc/
-      gemm_tiled_fp16acc.cu
-      gemm_tiled_fp16acc_rb1x4.cu
-      gemm_tiled_fp16acc_rb2x4.cu
-      gemm_cublas_gemmex_fp16acc.cu
-
     fp16_wmma/
-      gemm_wmma_fp16acc*.cu
-
     fp16_mma/
-      gemm_mma_fp16acc*.cu
-
     fail/
-      failed_or_superseded_wmma_variants.cu
 
   scripts/
     collect_env.sh
@@ -172,6 +158,12 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
+本地内存紧张时：
+
+```bash
+cmake --build build -j2
+```
+
 构建产物：
 
 ```text
@@ -184,7 +176,7 @@ build/bench_gemm
 
 ```bash
 ./build/bench_gemm \
-  --impl mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync \
+  --impl mma_fp16acc_m16n32_k32_vs \
   --M 4096 --N 4096 --K 4096 \
   --warmup 3 --repeat 10 --no-check
 ```
@@ -207,7 +199,7 @@ cuBLASLt baseline：
 
 项目统一用 median GFLOP/s 作为性能比较指标。
 
-## 批量 benchmark
+## 批量 Benchmark
 
 当前 Tensor Core sweep：
 
@@ -215,7 +207,7 @@ cuBLASLt baseline：
 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 ```
 
-覆盖尺寸：
+只跑指定尺寸：
 
 ```bash
 SIZES_OVERRIDE="1024 2048 4096" \
@@ -224,10 +216,19 @@ PROFILE_SET=phase2_4090_tc \
 bash scripts/run_bench.sh
 ```
 
+只跑指定实现，适合每轮小对照：
+
+```bash
+IMPLS_OVERRIDE="mma_fp16acc_m16n32_k32_vs cublaslt_fp16acc" \
+CHECK_MAX_SIZE=256 \
+PROFILE_SET=phase2_4090_tc \
+bash scripts/run_bench.sh
+```
+
 指定 GPU：
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 \
+CUDA_VISIBLE_DEVICES=0 \
 CHECK_MAX_SIZE=256 \
 PROFILE_SET=phase2_4090_tc \
 bash scripts/run_bench.sh
@@ -265,13 +266,6 @@ python3 scripts/plot.py
 results/plots/
 ```
 
-当前主要图表：
-
-```text
-results/plots/gflops_phase2_4090_tc_mma.png
-results/plots/rel_to_cublaslt_phase2_4090_tc_mma.png
-```
-
 ## 一键脚本
 
 `scripts/run_all_scripts.sh` 会自动选择空闲 RTX 4090，并执行：
@@ -300,22 +294,12 @@ RUN_NCU=0 bash scripts/run_all_scripts.sh
 选择 NCU 尺寸：
 
 ```bash
-NCU_SIZES="2048 4096" bash scripts/run_all_scripts.sh
+NCU_SIZES="1024 2048" bash scripts/run_all_scripts.sh
 ```
 
-GPU 空闲判定逻辑：
+注意：这个脚本的自动选卡逻辑仍按共用 RTX 4090 服务器设计。本地 4060 开发时通常直接用 `run_bench.sh` 和 `run_ncu_compare.sh`。
 
-- GPU 名称包含 `4090`
-- 没有 compute process
-- `memory.used <= EMPTY_MEM_MB`，默认 `1024 MiB`
-
-可覆盖：
-
-```bash
-EMPTY_MEM_MB=2048 bash scripts/run_all_scripts.sh
-```
-
-## Nsight Compute 文本 profiling
+## Nsight Compute 文本 Profiling
 
 NCU 脚本：
 
@@ -326,7 +310,7 @@ bash scripts/run_ncu_compare.sh
 默认比较：
 
 ```text
-mma_fp16acc_m16n32_staged_cpasync_k64_4x2_skew16_vstore_skiplastsync
+mma_fp16acc_m16n32_k32_vs
 cublaslt_fp16acc
 ```
 
@@ -334,6 +318,12 @@ cublaslt_fp16acc
 
 ```text
 4096
+```
+
+本地 WSL 上 `NCU_SET=full` 跑 4096 可能失败或耗时过长，当前实践中常用 1024 做结构诊断：
+
+```bash
+NCU_SIZES=1024 bash scripts/run_ncu_compare.sh
 ```
 
 输出为 `.txt`，不生成 `.ncu-rep`：
@@ -346,7 +336,7 @@ profiles/ncu/ncu_cublaslt/
 常用覆盖：
 
 ```bash
-NCU_SIZES="2048 3072 4096" bash scripts/run_ncu_compare.sh
+MMA_BEST_IMPL=mma_fp16acc_m16n32_k32_vs NCU_SIZES=1024 bash scripts/run_ncu_compare.sh
 NCU_SET=full NCU_PAGE=raw bash scripts/run_ncu_compare.sh
 NCU_BIN=/path/to/ncu bash scripts/run_ncu_compare.sh
 ```
@@ -357,14 +347,14 @@ NCU 注意事项：
 - NCU 只用于判断 stall、occupancy、pipeline、shared memory、global memory、instruction mix。
 - 共用服务器上可能遇到 `/tmp/nsight-compute-lock` stale lock。脚本会提前检查并提示 owner。不要在未确认的情况下删除别人的 lock。
 
-第一轮 NCU 重点关注：
+重点关注：
 
 - SM / Tensor Core 利用率
 - achieved occupancy / active warps
 - eligible warps per scheduler
-- warp stall reasons
-- shared memory throughput / bank conflict / ldmatrix 相关压力
-- global memory 与 cp.async 行为
+- warp stall reasons，尤其 barrier、short scoreboard、math pipe throttle
+- shared memory throughput / bank conflict / `ldmatrix` 相关压力
+- global memory 与 `cp.async` 行为
 - instruction mix
 
 ## 实验口径
@@ -385,7 +375,7 @@ FP16 input kernels: atol=2e-2, rtol=2e-2
 
 很多 Tensor Core kernel 要求 M/N/K 满足 tile 对齐，launcher 中保留显式 guard。
 
-## 添加新 kernel
+## 添加新 Kernel
 
 1. 在对应目录新增 `.cu` 文件：
 
@@ -415,45 +405,16 @@ scripts/plot.py
 5. 命名建议：
 
 - 文件名和 impl 保持可读，但不要无限叠长后缀。
-- 后续短后缀约定：
+- 短后缀约定：
   - `vs`: vector store
   - `sls`: skip last sync
   - `bpf`: B fragment prefetch
   - `nc`: no check
 
-## 技术路线记录
-
-已经确认有效的方向：
-
-- 从 WMMA 下沉到 inline MMA/ldmatrix 是大幅提升方向。
-- K64 比 K32 更适合作为当前 MMA 主线。
-- `skew16` 是当前 padding sweep 中的优选。
-- `float2` 写回明显优于标量写回。
-- 去掉最后一轮无必要同步有小幅稳定收益。
-
-已经确认不是当前主线的方向：
-
-- `skew32`
-- `cp.async.ca`
-- `m16n64 4x1 / 4x2` 作为替代主线
-- `nocheck` store
-- B fragment prefetch 当前写法
-
-下一步：
-
-1. 等待 Nsight Compute 文本 profile，比较当前 best custom kernel 与 `cublaslt_fp16acc`。
-2. 根据 NCU 判断下一轮方向：
-   - shared layout / swizzle
-   - cp.async stage depth
-   - warp tile / CTA tile 重组
-   - occupancy / register pressure
-   - epilogue / store path
-3. 避免继续只靠盲 sweep 做小幅随机波动优化。
-
 ## 仓库卫生
 
 - 不提交 build 输出、临时日志、`.ncu-rep`、`.nsys-rep`。
-- `results/raw/` 和 `results/table/` 用于实验数据同步。
-- `results/plots/` 用于图表输出。
+- `results/raw/`、`results/table/`、`results/plots/` 用于实验数据与图表输出。
 - 保持 benchmark 输出格式稳定，因为 `raw_to_csv.py` 和 `plot.py` 依赖它。
 - 不要随意改 correctness tolerance、输入生成、计时口径，否则历史结果不可比。
+- 避免 broad cleanup `src/fail/`，这些文件记录已经探索过的失败路径。
