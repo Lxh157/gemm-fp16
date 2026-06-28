@@ -86,6 +86,7 @@ add_executable(bench_gemm
   src/fp16_wgmma/gemm_wgmma_m64n64k16.cu
   src/fp16_wgmma/gemm_wgmma_m64n64k16_db.cu
   src/fp16_wgmma/gemm_wgmma_m64n64k16_tma_a.cu
+  src/fp16_wgmma/gemm_wgmma_m64n64k16_tma_ab.cu
 
   src/cublaslt_fp16acc.cu
 )

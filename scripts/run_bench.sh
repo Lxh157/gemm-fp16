@@ -121,6 +121,7 @@ case "${PROFILE_SET}" in
       wgmma_m64n64k16
       wgmma_m64n64k16_db
       wgmma_m64n64k16_tma_a
+      wgmma_m64n64k16_tma_ab
 
       # cublas_gemmex_fp16acc
       cublaslt_fp16acc
