@@ -1,5 +1,23 @@
 # CUDA GEMM Optimization Practice
 
+## H100 / SM90a Current Mainline
+
+This checkout is currently used for the H100 WGMMA optimization route. The current best custom H100 kernel is:
+
+```text
+impl: wgmma_m64n64k32_tma_ab
+file: src/fp16_wgmma/gemm_wgmma_m64n64k32_tma_ab.cu
+```
+
+Use same-device, same-run comparisons against `cublaslt_fp16acc`; do not compare H100 results numerically with historical RTX 4060/4090 runs. For H100 batch runs, prefer:
+
+```bash
+PROFILE_SET=h100_wgmma SIZES_OVERRIDE="1024 2048 4096" CHECK_MAX_SIZE=256 bash scripts/run_bench.sh
+BEST_IMPL=wgmma_m64n64k32_tma_ab NCU_SIZES=2048 bash scripts/run_ncu_compare.sh
+```
+
+`CMakeLists.txt` currently targets `90a`.
+
 这个仓库是一个 CUDA GEMM 优化实验项目，目标是把 GEMM 从基础 FP32 kernel 推进到 FP16 input / FP32 accumulate / Tensor Core，并用 benchmark、图表和 Nsight Compute 文本指标驱动后续优化。
 
 当前主线按 FP16/Tensor Core 优化路线组织：

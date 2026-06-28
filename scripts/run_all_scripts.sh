@@ -13,6 +13,9 @@ cd "${ROOT_DIR}"
 EMPTY_MEM_MB="${EMPTY_MEM_MB:-1024}"
 BUILD_DIR="${BUILD_DIR:-build}"
 RUN_NCU="${RUN_NCU:-1}"
+GPU_NAME_FILTER="${GPU_NAME_FILTER:-H100}"
+PROFILE_SET="${PROFILE_SET:-h100_wgmma}"
+CHECK_MAX_SIZE="${CHECK_MAX_SIZE:-256}"
 
 echo "=== nvidia-smi ==="
 nvidia-smi
@@ -58,8 +61,8 @@ for line in "${GPU_LINES[@]}"; do
   mem_used="$(trim "${mem_used}")"
   bus_id="$(trim "${bus_id}")"
 
-  if [[ "${gpu_name}" != *"4090"* ]]; then
-    echo "[skip] gpu=${gpu_idx}, name=${gpu_name}, reason=not RTX 4090"
+  if [[ -n "${GPU_NAME_FILTER}" && "${gpu_name}" != *"${GPU_NAME_FILTER}"* ]]; then
+    echo "[skip] gpu=${gpu_idx}, name=${gpu_name}, reason=name does not contain ${GPU_NAME_FILTER}"
     continue
   fi
 
@@ -79,7 +82,7 @@ for line in "${GPU_LINES[@]}"; do
 done
 
 if [[ -z "${SELECTED_GPU}" ]]; then
-  echo "[ERROR] all RTX 4090 GPUs are occupied; benchmark cannot run now."
+  echo "[ERROR] no free GPU matched GPU_NAME_FILTER=${GPU_NAME_FILTER}; benchmark cannot run now."
   exit 1
 fi
 
@@ -92,8 +95,8 @@ echo
 echo "=== run benchmark on physical GPU ${SELECTED_GPU} ==="
 CUDA_VISIBLE_DEVICES="${SELECTED_GPU}" \
 BUILD_DIR="${BUILD_DIR}" \
-CHECK_MAX_SIZE=256 \
-PROFILE_SET=phase2_4090_tc \
+CHECK_MAX_SIZE="${CHECK_MAX_SIZE}" \
+PROFILE_SET="${PROFILE_SET}" \
 bash scripts/run_bench.sh
 
 echo

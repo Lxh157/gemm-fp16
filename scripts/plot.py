@@ -110,6 +110,16 @@ PHASE2_4090_IMPLS = [
     "cublaslt_fp16acc",
 ]
 
+H100_WGMMA_IMPLS = [
+    "wgmma_m64n8k16",
+    "wgmma_m64n64k16",
+    "wgmma_m64n64k16_db",
+    "wgmma_m64n64k16_tma_a",
+    "wgmma_m64n64k16_tma_ab",
+    "wgmma_m64n64k32_tma_ab",
+    "cublaslt_fp16acc",
+]
+
 
 def pick_latest(candidates):
     return candidates[-1] if candidates else None
@@ -204,13 +214,15 @@ def plot_relative(data, impls, baseline_impl, sizes, title, ylabel, out_path):
 phase1_explicit = sorted(RAW_DIR.glob("bench_phase1_4060_all_*.txt"))
 phase1_legacy = sorted(RAW_DIR.glob("bench_fp16_*.txt"))
 phase2_4090 = sorted(RAW_DIR.glob("bench_phase2_4090_tc_*.txt"))
+h100_wgmma = sorted(RAW_DIR.glob("bench_h100_wgmma_*.txt"))
 
 input_phase1 = pick_latest(phase1_explicit) or pick_latest(phase1_legacy)
 input_phase2 = pick_latest(phase2_4090)
+input_h100 = pick_latest(h100_wgmma)
 
-if input_phase1 is None and input_phase2 is None:
+if input_phase1 is None and input_phase2 is None and input_h100 is None:
     raise FileNotFoundError(
-        "No phase1/phase2 raw result files found under results/raw/. "
+        "No phase1/phase2/H100 raw result files found under results/raw/. "
         "Run scripts/run_bench.sh first."
     )
 
@@ -287,3 +299,34 @@ if input_phase2 is not None:
     print(f"[OK] Wrote: {out_phase2_rel}")
 else:
     print("[WARN] No Phase 2 raw file found, skip Phase 2 plots.")
+
+if input_h100 is not None:
+    data_h100 = parse_bench_file(input_h100)
+    h100_sizes = collect_sizes(data_h100, H100_WGMMA_IMPLS)
+
+    out_h100_gflops = OUT_DIR / "gflops_h100_wgmma.png"
+    out_h100_rel = OUT_DIR / "rel_to_cublaslt_h100_wgmma.png"
+
+    plot_gflops(
+        data_h100,
+        H100_WGMMA_IMPLS,
+        h100_sizes,
+        "H100 - WGMMA Mainline Throughput",
+        out_h100_gflops,
+    )
+
+    plot_relative(
+        data_h100,
+        H100_WGMMA_IMPLS,
+        "cublaslt_fp16acc",
+        h100_sizes,
+        "H100 - Relative Throughput vs cuBLASLt FP16acc",
+        "Percent of cuBLASLt FP16acc (%)",
+        out_h100_rel,
+    )
+
+    print(f"[OK] Parsed H100 raw: {input_h100}")
+    print(f"[OK] Wrote: {out_h100_gflops}")
+    print(f"[OK] Wrote: {out_h100_rel}")
+else:
+    print("[WARN] No H100 raw file found, skip H100 plots.")

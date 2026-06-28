@@ -4,9 +4,11 @@ set -euo pipefail
 # 用法：
 #   bash scripts/run_bench.sh
 #   PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
+#   PROFILE_SET=h100_wgmma bash scripts/run_bench.sh
 #   PROFILE_SET=phase1_4060_all bash scripts/run_bench.sh
 #   BUILD_DIR=build WARMUP=3 REPEAT=10 bash scripts/run_bench.sh
 #   SIZES_OVERRIDE="1024 2048 4096" PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
+#   SIZES_OVERRIDE="1024 2048 4096" PROFILE_SET=h100_wgmma bash scripts/run_bench.sh
 #   IMPLS_OVERRIDE="mma_fp16acc_m16n32_k32_vs cublaslt_fp16acc" bash scripts/run_bench.sh
 #   CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
 #   CUDA_VISIBLE_DEVICES=1 CHECK_MAX_SIZE=256 PROFILE_SET=phase2_4090_tc bash scripts/run_bench.sh
@@ -18,7 +20,7 @@ LOG_DIR="${LOG_DIR:-logs}"
 
 WARMUP="${WARMUP:-3}"
 REPEAT="${REPEAT:-10}"
-PROFILE_SET="${PROFILE_SET:-phase2_4090_tc}"
+PROFILE_SET="${PROFILE_SET:-h100_wgmma}"
 CHECK_MAX_SIZE="${CHECK_MAX_SIZE:-2048}"
 CONTINUE_ON_ERROR="${CONTINUE_ON_ERROR:-1}"
 EXTRA_BENCH_ARGS="${EXTRA_BENCH_ARGS:-}"
@@ -128,9 +130,26 @@ case "${PROFILE_SET}" in
       cublaslt_fp16acc
     )
     ;;
+  h100_wgmma)
+    OUT_PREFIX="bench_h100_wgmma"
+    if [[ -n "${SIZES_OVERRIDE:-}" ]]; then
+      read -r -a SIZES <<< "${SIZES_OVERRIDE}"
+    else
+      SIZES=(256 512 1024 2048 4096)
+    fi
+    IMPLS=(
+      wgmma_m64n8k16
+      wgmma_m64n64k16
+      wgmma_m64n64k16_db
+      wgmma_m64n64k16_tma_a
+      wgmma_m64n64k16_tma_ab
+      wgmma_m64n64k32_tma_ab
+      cublaslt_fp16acc
+    )
+    ;;
   *)
     echo "[ERROR] unknown PROFILE_SET=${PROFILE_SET}"
-    echo "Supported PROFILE_SET values: phase1_4060_all, phase2_4090_tc"
+    echo "Supported PROFILE_SET values: phase1_4060_all, phase2_4090_tc, h100_wgmma"
     exit 1
     ;;
 esac

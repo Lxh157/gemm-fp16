@@ -1,12 +1,26 @@
 # Agent Notes
 
+## Current H100 Mainline
+
+This checkout is currently used for the H100 / SM90a WGMMA route. The current best custom H100 kernel is:
+
+```text
+file:
+src/fp16_wgmma/gemm_wgmma_m64n64k32_tma_ab.cu
+
+impl:
+wgmma_m64n64k32_tma_ab
+```
+
+Use same-device, same-run comparisons against `cublaslt_fp16acc`. On H100, use `PROFILE_SET=h100_wgmma` for batch runs and `BEST_IMPL=wgmma_m64n64k32_tma_ab` for NCU comparison. Nsight Compute is for bottleneck diagnosis only; benchmark timing should come from `bench_gemm` runs without NCU instrumentation.
+
 ## Project Overview
 
 This repository is a CUDA GEMM optimization lab focused on FP32, FP16-input FP32-accumulate, WMMA, inline MMA, Tensor Core, and profiling-driven iteration.
 
 The benchmark entrypoint is `src/main_bench.cu`, which dispatches kernels by `--impl`. The build target is `bench_gemm`.
 
-Current main direction is FP16-input FP32-accumulate Tensor Core optimization using inline PTX MMA, `ldmatrix`, and `cp.async`.
+Historical main direction was FP16-input FP32-accumulate Tensor Core optimization using inline PTX MMA, `ldmatrix`, and `cp.async`. The active H100 direction is WGMMA plus TMA under `src/fp16_wgmma/`.
 
 Current best custom kernel on the local RTX 4060 Laptop:
 
@@ -70,12 +84,12 @@ nc  = no check
 
 ## Environment
 
-Primary target architecture is Ada / SM89.
+Primary target architecture for this branch is Hopper / SM90a.
 
 `CMakeLists.txt` currently sets:
 
 ```cmake
-set(CMAKE_CUDA_ARCHITECTURES 89)
+set(CMAKE_CUDA_ARCHITECTURES 90a)
 ```
 
 Phase 2 server environment usually uses CUDA 11.8:
