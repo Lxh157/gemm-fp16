@@ -115,6 +115,9 @@ case "${PROFILE_SET}" in
       mma_fp16acc_m16n64_staged_cpasync_k64_4x1_skew16
       mma_fp16acc_m16n64_staged_cpasync_k64_4x2_skew16
       mma_fp16acc_m32n32_k64_4x2
+      mma_fp16acc_m32n32_k64_4x2_s8
+      mma_fp16acc_m32n32_k128_4x2_s8
+      wgmma_m64n8k16_sm90a
 
       # cublas_gemmex_fp16acc
       cublaslt_fp16acc
