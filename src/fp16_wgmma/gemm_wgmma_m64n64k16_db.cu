@@ -135,7 +135,7 @@ __device__ __forceinline__ void issue_wgmma_m64n64_atoms(
     wgmma_commit();
 }
 
-__global__ void gemm_wgmma_m64n64k16_db_sm90a_kernel(const half* __restrict__ A,
+__global__ void gemm_wgmma_m64n64k16_db_kernel(const half* __restrict__ A,
                                                       const half* __restrict__ B,
                                                       float* __restrict__ C,
                                                       int M, int N, int K) {
@@ -179,16 +179,16 @@ __global__ void gemm_wgmma_m64n64k16_db_sm90a_kernel(const half* __restrict__ A,
 
 } // namespace
 
-void launch_gemm_wgmma_m64n64k16_db_sm90a(const half* dA, const half* dB, float* dC,
+void launch_gemm_wgmma_m64n64k16_db(const half* dA, const half* dB, float* dC,
                                         int M, int N, int K, cudaStream_t stream) {
     if (M % BLOCK_M != 0 || N % BLOCK_N != 0 || K % BLOCK_K != 0) {
         std::fprintf(stderr,
-                     "gemm_wgmma_m64n64k16_db_sm90a: requires M %% 64 == 0, N %% 64 == 0, K %% 16 == 0. Got M=%d N=%d K=%d\n",
+                     "gemm_wgmma_m64n64k16_db: requires M %% 64 == 0, N %% 64 == 0, K %% 16 == 0. Got M=%d N=%d K=%d\n",
                      M, N, K);
         std::exit(EXIT_FAILURE);
     }
     dim3 block(WG_THREADS);
     dim3 grid(N / BLOCK_N, M / BLOCK_M);
-    gemm_wgmma_m64n64k16_db_sm90a_kernel<<<grid, block, 0, stream>>>(dA, dB, dC, M, N, K);
+    gemm_wgmma_m64n64k16_db_kernel<<<grid, block, 0, stream>>>(dA, dB, dC, M, N, K);
     CHECK_CUDA(cudaGetLastError());
 }

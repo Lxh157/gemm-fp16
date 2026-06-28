@@ -82,9 +82,10 @@ add_executable(bench_gemm
   src/fp16_mma/gemm_mma_fp16acc_m32n32_k64_4x2.cu
   src/fp16_mma/gemm_mma_fp16acc_m32n32_k64_4x2_s8.cu
   src/fp16_mma/gemm_mma_fp16acc_m32n32_k128_4x2_s8.cu
-  src/fp16_wgmma/gemm_wgmma_m64n8k16_sm90a.cu
-  src/fp16_wgmma/gemm_wgmma_m64n64k16_sm90a.cu
-  src/fp16_wgmma/gemm_wgmma_m64n64k16_db_sm90a.cu
+  src/fp16_wgmma/gemm_wgmma_m64n8k16.cu
+  src/fp16_wgmma/gemm_wgmma_m64n64k16.cu
+  src/fp16_wgmma/gemm_wgmma_m64n64k16_db.cu
+  src/fp16_wgmma/gemm_wgmma_m64n64k16_tma_a.cu
 
   src/cublaslt_fp16acc.cu
 )
@@ -101,4 +102,4 @@ target_compile_options(bench_gemm PRIVATE
 # CUDA Toolkit（提供 CUDA::cudart / CUDA::cublas 等目标）
 find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(bench_gemm PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
+target_link_libraries(bench_gemm PRIVATE CUDA::cudart CUDA::cuda_driver CUDA::cublas CUDA::cublasLt)
