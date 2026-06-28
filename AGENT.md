@@ -6,13 +6,15 @@ This checkout is currently used for the H100 / SM90a WGMMA route. The current be
 
 ```text
 file:
-src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab.cu
+src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab_mbar.cu
 
 impl:
-wgmma_m64n128k32_tma_ab
+wgmma_m64n128k32_tma_ab_mbar
 ```
 
-Use same-device, same-run comparisons against `cublaslt_fp16acc`. On H100, use `PROFILE_SET=h100_wgmma` for batch runs and `BEST_IMPL=wgmma_m64n128k32_tma_ab` for NCU comparison. Nsight Compute is for bottleneck diagnosis only; benchmark timing should come from `bench_gemm` runs without NCU instrumentation.
+Use same-device, same-run comparisons against `cublaslt_fp16acc`. On H100, use `PROFILE_SET=h100_wgmma` for batch runs and `BEST_IMPL=wgmma_m64n128k32_tma_ab_mbar` for NCU comparison. Nsight Compute is for bottleneck diagnosis only; benchmark timing should come from `bench_gemm` runs without NCU instrumentation.
+
+Current H100 evidence: the mbar variant is only a small step over `wgmma_m64n128k32_tma_ab`; it reduces synchronization overhead by using a block-wide TMA mbarrier and grouped WGMMA commit. Failed or slower routes in this round included wider single-WG N tiles, 2-WG CTA sharing, K64 staging, ordinary B global-load packing, split TMA wait, fence-once, and direct wide WGMMA without the correct B core-matrix layout. The next substantial route should focus on correct B shared-memory layout/swizzle for wider WGMMA instructions such as m64n16/m64n64.
 
 ## Project Overview
 

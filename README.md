@@ -5,18 +5,20 @@
 This checkout is currently used for the H100 WGMMA optimization route. The current best custom H100 kernel is:
 
 ```text
-impl: wgmma_m64n128k32_tma_ab
-file: src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab.cu
+impl: wgmma_m64n128k32_tma_ab_mbar
+file: src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab_mbar.cu
 ```
 
 Use same-device, same-run comparisons against `cublaslt_fp16acc`; do not compare H100 results numerically with historical RTX 4060/4090 runs. For H100 batch runs, prefer:
 
 ```bash
 PROFILE_SET=h100_wgmma SIZES_OVERRIDE="1024 2048 4096" CHECK_MAX_SIZE=256 bash scripts/run_bench.sh
-BEST_IMPL=wgmma_m64n128k32_tma_ab NCU_SIZES=2048 bash scripts/run_ncu_compare.sh
+BEST_IMPL=wgmma_m64n128k32_tma_ab_mbar NCU_SIZES=2048 bash scripts/run_ncu_compare.sh
 ```
 
 `CMakeLists.txt` currently targets `90a`.
+
+Latest H100 WGMMA note: `wgmma_m64n128k32_tma_ab_mbar` keeps the 64x128x32 TMA A/B tile but uses a block-wide TMA mbarrier directly and commits one WGMMA group per K32 tile. Same-run checks showed a small improvement over `wgmma_m64n128k32_tma_ab`, especially at 4096/8192 sizes. The next large step is expected to require a correct wide-WGMMA B shared-memory/core-matrix layout rather than more n8-panel micro-tuning.
 
 这个仓库是一个 CUDA GEMM 优化实验项目，目标是把 GEMM 从基础 FP32 kernel 推进到 FP16 input / FP32 accumulate / Tensor Core，并用 benchmark、图表和 Nsight Compute 文本指标驱动后续优化。
 
