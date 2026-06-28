@@ -30,7 +30,7 @@ NCU_REPEAT="${NCU_REPEAT:-1}"
 NCU_TMPDIR="${NCU_TMPDIR:-${OUT_ROOT:-profiles/ncu}/tmp}"
 NCU_SECTIONS="${NCU_SECTIONS:-SpeedOfLight MemoryWorkloadAnalysis SchedulerStats WarpStateStats}"
 
-BEST_IMPL="${BEST_IMPL:-${MMA_BEST_IMPL:-wgmma_m64n64k32_tma_ab}}"
+BEST_IMPL="${BEST_IMPL:-${MMA_BEST_IMPL:-wgmma_m64n128k32_tma_ab}}"
 BASELINE_IMPL="${BASELINE_IMPL:-${CUBLASLT_IMPL:-cublaslt_fp16acc}}"
 
 OUT_ROOT="${OUT_ROOT:-profiles/ncu}"

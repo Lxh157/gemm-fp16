@@ -6,13 +6,13 @@ This checkout is currently used for the H100 / SM90a WGMMA route. The current be
 
 ```text
 file:
-src/fp16_wgmma/gemm_wgmma_m64n64k32_tma_ab.cu
+src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab.cu
 
 impl:
-wgmma_m64n64k32_tma_ab
+wgmma_m64n128k32_tma_ab
 ```
 
-Use same-device, same-run comparisons against `cublaslt_fp16acc`. On H100, use `PROFILE_SET=h100_wgmma` for batch runs and `BEST_IMPL=wgmma_m64n64k32_tma_ab` for NCU comparison. Nsight Compute is for bottleneck diagnosis only; benchmark timing should come from `bench_gemm` runs without NCU instrumentation.
+Use same-device, same-run comparisons against `cublaslt_fp16acc`. On H100, use `PROFILE_SET=h100_wgmma` for batch runs and `BEST_IMPL=wgmma_m64n128k32_tma_ab` for NCU comparison. Nsight Compute is for bottleneck diagnosis only; benchmark timing should come from `bench_gemm` runs without NCU instrumentation.
 
 ## Project Overview
 

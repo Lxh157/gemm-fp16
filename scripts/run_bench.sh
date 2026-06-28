@@ -144,6 +144,7 @@ case "${PROFILE_SET}" in
       wgmma_m64n64k16_tma_a
       wgmma_m64n64k16_tma_ab
       wgmma_m64n64k32_tma_ab
+      wgmma_m64n128k32_tma_ab
       cublaslt_fp16acc
     )
     ;;

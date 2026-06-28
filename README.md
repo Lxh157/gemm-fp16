@@ -5,15 +5,15 @@
 This checkout is currently used for the H100 WGMMA optimization route. The current best custom H100 kernel is:
 
 ```text
-impl: wgmma_m64n64k32_tma_ab
-file: src/fp16_wgmma/gemm_wgmma_m64n64k32_tma_ab.cu
+impl: wgmma_m64n128k32_tma_ab
+file: src/fp16_wgmma/gemm_wgmma_m64n128k32_tma_ab.cu
 ```
 
 Use same-device, same-run comparisons against `cublaslt_fp16acc`; do not compare H100 results numerically with historical RTX 4060/4090 runs. For H100 batch runs, prefer:
 
 ```bash
 PROFILE_SET=h100_wgmma SIZES_OVERRIDE="1024 2048 4096" CHECK_MAX_SIZE=256 bash scripts/run_bench.sh
-BEST_IMPL=wgmma_m64n64k32_tma_ab NCU_SIZES=2048 bash scripts/run_ncu_compare.sh
+BEST_IMPL=wgmma_m64n128k32_tma_ab NCU_SIZES=2048 bash scripts/run_ncu_compare.sh
 ```
 
 `CMakeLists.txt` currently targets `90a`.
