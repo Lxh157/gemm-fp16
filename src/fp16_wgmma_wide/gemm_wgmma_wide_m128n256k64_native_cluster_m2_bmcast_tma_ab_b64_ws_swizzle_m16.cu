@@ -19,7 +19,7 @@
 namespace {
 constexpr int WG_THREADS = 128;
 constexpr int NUM_CONSUMER_WGS = 2;
-constexpr int CTA_THREADS = 384;
+constexpr int CTA_THREADS = 288;
 constexpr int PRODUCER_TID = NUM_CONSUMER_WGS * WG_THREADS;
 constexpr int WG_M = 64;
 constexpr int BLOCK_M = NUM_CONSUMER_WGS * WG_M;
