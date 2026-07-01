@@ -87,6 +87,9 @@ add_executable(bench_gemm
   src/fp16_wgmma_wide/gemm_wgmma_wide_probe_m64n64k16.cu
   src/fp16_wgmma_wide/gemm_wgmma_wide_m64n128k32_tma_ab_b32_mbar_swizzle_m16.cu
   src/fp16_wgmma_wide/gemm_wgmma_wide_m64n128k32_tma_ab_b32_ws_swizzle_m16.cu
+  src/fp16_wgmma_wide/gemm_wgmma_wide_m128n128k32_tma_ab_b32_ws_swizzle_m16.cu
+  src/fp16_wgmma_wide/gemm_wgmma_wide_m256n128k32_tma_ab_b32_ws_swizzle_m16.cu
+  src/fp16_wgmma_wide/gemm_wgmma_wide_m256n128k64_tma_ab_b64_ws_swizzle_m16.cu
   src/fp16_wgmma/gemm_wgmma_m64n64k16_db.cu
   src/fp16_wgmma/gemm_wgmma_m64n64k16_tma_a.cu
   src/fp16_wgmma/gemm_wgmma_m64n64k16_tma_ab.cu
